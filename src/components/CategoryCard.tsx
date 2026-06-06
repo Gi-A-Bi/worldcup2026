@@ -52,6 +52,9 @@ export default function CategoryCard({
   bets,
   roomId,
   defaultOpen = false,
+  iConfirmed = false,
+  confirmedCount = 0,
+  onToggleConfirm,
   onChanged,
   onBet,
 }: {
@@ -61,6 +64,9 @@ export default function CategoryCard({
   bets: BetWithNames[];
   roomId: string;
   defaultOpen?: boolean;
+  iConfirmed?: boolean;
+  confirmedCount?: number;
+  onToggleConfirm?: () => void;
   onChanged: () => void;
   onBet: () => void;
 }) {
@@ -224,9 +230,39 @@ export default function CategoryCard({
           {/* ===== 열림: 베팅 ===== */}
           {isOpen && (
             <>
-              <p className="mb-3 rounded-lg bg-pitch-600/10 px-3 py-2 text-xs leading-relaxed text-pitch-50/70">
-                {helpText(isParimutuel)}
-              </p>
+              {/* 개인 확정 상태 */}
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-pitch-50/50">
+                  ✅ 베팅 확정 {confirmedCount}명
+                </span>
+                {onToggleConfirm && (
+                  <button
+                    type="button"
+                    onClick={onToggleConfirm}
+                    className={[
+                      "rounded-lg border px-3 py-1.5 text-xs font-semibold",
+                      iConfirmed
+                        ? "border-pitch-700/50 text-pitch-50/70 hover:text-pitch-50"
+                        : "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20",
+                    ].join(" ")}
+                  >
+                    {iConfirmed ? "내 베팅 확정 해제" : "내 베팅 확정"}
+                  </button>
+                )}
+              </div>
+
+              {iConfirmed && (
+                <p className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                  ✅ 내 베팅을 확정했어요. 더 베팅하려면 “내 베팅 확정 해제”를
+                  누르세요.
+                </p>
+              )}
+
+              {!iConfirmed && (
+                <p className="mb-3 rounded-lg bg-pitch-600/10 px-3 py-2 text-xs leading-relaxed text-pitch-50/70">
+                  {helpText(isParimutuel)}
+                </p>
+              )}
 
               {options.length === 0 ? (
                 <p className="text-xs text-pitch-50/40">
@@ -242,11 +278,12 @@ export default function CategoryCard({
                   agg={agg}
                   isParimutuel={isParimutuel}
                   playerId={playerId}
+                  disabled={iConfirmed}
                 />
               )}
 
               {/* 베팅 바 */}
-              {pickCount > 0 && (
+              {!iConfirmed && pickCount > 0 && (
                 <div className="mt-3 rounded-xl border border-gold-500/30 bg-gold-500/5 p-3">
                   <div className="mb-2 flex items-center justify-between text-xs">
                     <span className="font-semibold text-pitch-50">
