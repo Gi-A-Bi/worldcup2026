@@ -22,8 +22,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 {title}
               </p>
               <p className="text-[11px] text-pitch-400">
-                {room ? `코드 ${room.code}` : "2026 월드컵"}
-                {player ? ` · ${player.nickname}` : ""}
+                {player ? player.nickname : "2026 월드컵"}
               </p>
             </div>
           </Link>

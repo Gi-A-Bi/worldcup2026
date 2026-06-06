@@ -15,7 +15,6 @@ export default function HomePage() {
   const { room, player, signOut } = useSession();
   const [players, setPlayers] = useState<Player[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [copied, setCopied] = useState<"code" | "link" | null>(null);
 
   const roomId = room?.id;
 
@@ -58,57 +57,20 @@ export default function HomePage() {
 
   if (!room || !player) return null;
 
-  const inviteLink =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/join?code=${room.code}`
-      : `/join?code=${room.code}`;
-
-  async function copy(text: string, which: "code" | "link") {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(which);
-      setTimeout(() => setCopied(null), 1500);
-    } catch {
-      // 클립보드 권한 없으면 무시
-    }
-  }
-
   return (
     <div className="space-y-6">
-      {/* 방 / 공유 카드 */}
+      {/* 게임 헤더 */}
       <section className="rounded-2xl border border-pitch-700/40 bg-pitch-900/40 p-5">
         <p className="text-xs text-pitch-400">{room.name}</p>
         <h1 className="text-lg font-bold text-pitch-50">
           {room.tournament_name?.trim() || room.name}
         </h1>
-
-        <div className="mt-4 rounded-xl border border-gold-500/30 bg-gold-500/5 p-4">
-          <p className="text-xs text-gold-300/80">방 코드</p>
-          <div className="mt-1 flex items-center justify-between gap-3">
-            <span className="font-mono text-3xl font-bold tracking-[0.3em] text-gold-300">
-              {room.code}
-            </span>
-            <div className="flex flex-col gap-1.5">
-              <button
-                type="button"
-                onClick={() => copy(room.code, "code")}
-                className="rounded-lg border border-pitch-700/50 px-3 py-1.5 text-xs font-medium text-pitch-50/80 hover:border-gold-500/40 hover:text-gold-300"
-              >
-                {copied === "code" ? "복사됨!" : "코드 복사"}
-              </button>
-              <button
-                type="button"
-                onClick={() => copy(inviteLink, "link")}
-                className="rounded-lg border border-pitch-700/50 px-3 py-1.5 text-xs font-medium text-pitch-50/80 hover:border-gold-500/40 hover:text-gold-300"
-              >
-                {copied === "link" ? "복사됨!" : "초대링크 복사"}
-              </button>
-            </div>
-          </div>
-          <p className="mt-2 text-[11px] text-pitch-50/40">
-            친구에게 코드나 초대링크를 공유하면 함께 베팅할 수 있어요.
-          </p>
-        </div>
+        <p className="mt-1 text-sm text-pitch-50/60">
+          {player.nickname} 님, 환영해요! 보유 칩{" "}
+          <span className="font-mono text-gold-300">
+            {player.chips.toLocaleString()}
+          </span>
+        </p>
       </section>
 
       {/* 참가자 리스트 */}
@@ -188,13 +150,17 @@ export default function HomePage() {
         <button
           type="button"
           onClick={() => {
-            if (confirm("방에서 나갈까요? (이 기기의 세션만 사라지고 기록은 남아요)")) {
+            if (
+              confirm(
+                "로그아웃할까요? (이 기기의 접속만 풀리고 기록/칩은 그대로 남아요)"
+              )
+            ) {
               signOut();
             }
           }}
           className="rounded-lg border border-pitch-700/40 py-2.5 text-center text-xs text-pitch-50/50 hover:text-pitch-50"
         >
-          방 나가기
+          로그아웃
         </button>
       </section>
     </div>

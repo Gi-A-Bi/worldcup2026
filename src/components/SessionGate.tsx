@@ -1,8 +1,7 @@
 "use client";
 
-import { Suspense } from "react";
 import AppShell from "@/components/AppShell";
-import EntryScreen from "@/components/EntryScreen";
+import LoginScreen from "@/components/LoginScreen";
 import { useSession } from "@/components/SessionProvider";
 
 /**
@@ -30,11 +29,7 @@ export default function SessionGate({
   }
 
   if (status === "no-session") {
-    return (
-      <Suspense fallback={null}>
-        <EntryScreen />
-      </Suspense>
-    );
+    return <LoginScreen />;
   }
 
   return <AppShell>{children}</AppShell>;

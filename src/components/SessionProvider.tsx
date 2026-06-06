@@ -7,7 +7,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { fetchPlayer, fetchRoomByCode } from "@/lib/rooms";
+import { fetchPlayer, fetchRoomById } from "@/lib/rooms";
 import { clearSession, loadSession, saveSession } from "@/lib/session";
 import type { Player, Room, Session } from "@/lib/types";
 
@@ -44,11 +44,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const applyFromSession = useCallback(async (s: Session) => {
     try {
-      const [r, p] = await Promise.all([
-        fetchRoomByCode(s.roomCode),
-        fetchPlayer(s.playerId),
-      ]);
-      // 방/플레이어가 사라졌거나 어긋나면 세션 폐기
+      const p = await fetchPlayer(s.playerId);
+      const r = p ? await fetchRoomById(p.room_id) : null;
+      // 플레이어/게임이 사라졌으면 세션 폐기
       if (!r || !p || p.room_id !== r.id) {
         clearSession();
         setSession(null);
