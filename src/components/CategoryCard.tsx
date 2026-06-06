@@ -319,8 +319,9 @@ export default function CategoryCard({
                   onClick={() => setConfirmLock(true)}
                   disabled={busy}
                   className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                  title="모든 참가자의 베팅을 마감합니다 (전체 적용)"
                 >
-                  마감하기
+                  전체 마감하기
                 </button>
               </div>
 
@@ -447,8 +448,8 @@ export default function CategoryCard({
 
       <ConfirmModal
         open={confirmLock}
-        title="카테고리 마감"
-        message={`'${category.name}' 카테고리를 마감할까요?\n마감하면 더 이상 베팅/옵션 변경을 할 수 없어요. (되돌릴 수 없음)`}
+        title="카테고리 마감 (전체 적용)"
+        message={`'${category.name}'을(를) 마감할까요?\n마감하면 나뿐 아니라 모든 참가자가 이 게임에 더 이상 베팅할 수 없어요.\n(전체 적용 · 되돌릴 수 없음)`}
         confirmText="마감하기"
         danger
         busy={busy}
