@@ -2,18 +2,19 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { fetchPlayers } from "@/lib/rooms";
+import { fetchPlayers, fetchTeams } from "@/lib/rooms";
 import { supabase } from "@/lib/supabase";
-import type { Player } from "@/lib/types";
+import type { Player, Team } from "@/lib/types";
 import { useSession } from "@/components/SessionProvider";
+import GroupStandings from "@/components/GroupStandings";
 
 /**
- * 메인 화면 (Stage 2): 방 정보 + 공유 + 참가자 리스트.
- * 조별 명단 상세 보기는 Stage 3에서 추가.
+ * 메인 화면: 방 정보 + 공유 + 참가자 리스트 + 조별 명단.
  */
 export default function HomePage() {
   const { room, player, signOut } = useSession();
   const [players, setPlayers] = useState<Player[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
 
   const roomId = room?.id;
@@ -22,6 +23,14 @@ export default function HomePage() {
     if (!roomId) return;
     fetchPlayers(roomId)
       .then(setPlayers)
+      .catch(() => {});
+  }, [roomId]);
+
+  // 조별 명단 (teams) 로드
+  useEffect(() => {
+    if (!roomId) return;
+    fetchTeams(roomId)
+      .then(setTeams)
       .catch(() => {});
   }, [roomId]);
 
@@ -149,6 +158,23 @@ export default function HomePage() {
             </li>
           )}
         </ul>
+      </section>
+
+      {/* 조별 명단 */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-pitch-50">조별 명단</h2>
+          <span className="text-xs text-pitch-50/40">
+            12개 조 · {teams.length}팀
+          </span>
+        </div>
+        {teams.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-pitch-700/40 px-4 py-6 text-center text-sm text-pitch-50/40">
+            팀 명단을 불러오는 중…
+          </p>
+        ) : (
+          <GroupStandings teams={teams} />
+        )}
       </section>
 
       {/* 액션 */}
