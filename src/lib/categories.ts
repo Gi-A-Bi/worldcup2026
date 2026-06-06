@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { teamOptionLabel } from "./flags";
 import type {
   CategoryType,
   CategoryWithOptions,
@@ -94,7 +95,7 @@ export async function addTeamOptions(categoryId: string, teams: Team[]) {
   const payload = teams.map((t) => ({
     category_id: categoryId,
     team_id: t.id,
-    label: `${t.flag_emoji ?? ""} ${t.name}`.trim(),
+    label: teamOptionLabel(t),
   }));
   const { error } = await supabase.from("options").insert(payload);
   if (error) throw error;

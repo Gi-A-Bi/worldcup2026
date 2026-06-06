@@ -2,6 +2,7 @@
 
 import { WORLD_CUP_GROUPS } from "@/lib/worldcupTeams";
 import type { Team } from "@/lib/types";
+import Flag from "@/components/Flag";
 
 /** 조별 명단 보기: 12개 조(A~L) × 4팀, 국기 (CLAUDE.md §7) */
 export default function GroupStandings({ teams }: { teams: Team[] }) {
@@ -34,8 +35,8 @@ export default function GroupStandings({ teams }: { teams: Team[] }) {
                 key={t.id}
                 className="flex items-center gap-2 text-sm text-pitch-50/90"
               >
-                <span className="text-base leading-none" aria-hidden>
-                  {t.flag_emoji}
+                <span className="text-base">
+                  <Flag emoji={t.flag_emoji} code={t.fifa_code} />
                 </span>
                 <span className="truncate">{t.name}</span>
               </li>

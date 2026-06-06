@@ -8,12 +8,9 @@ import {
   type CategoryTemplate,
   type NewOption,
 } from "@/lib/categories";
+import { teamOptionLabel } from "@/lib/flags";
 import type { Team } from "@/lib/types";
 import TeamMultiPicker from "@/components/TeamMultiPicker";
-
-function teamOptionLabel(t: Team) {
-  return `${t.flag_emoji ?? ""} ${t.name}`.trim();
-}
 
 export default function AddCategoryPanel({
   teams,

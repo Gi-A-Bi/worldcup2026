@@ -2,6 +2,7 @@
 
 import { WORLD_CUP_GROUPS } from "@/lib/worldcupTeams";
 import type { Team } from "@/lib/types";
+import Flag from "@/components/Flag";
 
 /** 조별로 묶어 팀을 복수 선택하는 체크박스 피커 */
 export default function TeamMultiPicker({
@@ -60,9 +61,7 @@ export default function TeamMultiPicker({
                     >
                       {checked ? "✓" : ""}
                     </span>
-                    <span className="leading-none" aria-hidden>
-                      {t.flag_emoji}
-                    </span>
+                    <Flag emoji={t.flag_emoji} code={t.fifa_code} />
                     <span className="truncate">{t.name}</span>
                   </button>
                 );
