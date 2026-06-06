@@ -95,6 +95,16 @@ export default function BetPage() {
     return map;
   }, [bets]);
 
+  // 열림 → 마감 → 정산됨 순으로 정렬 (목록)
+  const sortedCategories = useMemo(() => {
+    const order: Record<string, number> = { open: 0, locked: 1, resolved: 2 };
+    return [...categories].sort(
+      (a, b) =>
+        (order[a.status] ?? 9) - (order[b.status] ?? 9) ||
+        a.created_at.localeCompare(b.created_at)
+    );
+  }, [categories]);
+
   if (!room || !player) return null;
 
   return (
@@ -102,9 +112,33 @@ export default function BetPage() {
       <header>
         <h1 className="text-lg font-bold text-pitch-50">⚽ 베팅하기</h1>
         <p className="text-sm text-pitch-50/60">
-          옵션을 골라 칩을 걸어요. 풀·배당률은 실시간으로 갱신돼요.
+          게임(카테고리)을 골라 펼친 뒤 칩을 걸어요. 풀·배당률은 실시간 갱신돼요.
         </p>
       </header>
+
+      <details className="rounded-2xl border border-pitch-700/40 bg-pitch-900/30 px-4 py-3 text-sm text-pitch-50/70">
+        <summary className="cursor-pointer font-semibold text-pitch-50/90">
+          💡 배당률·베팅 방식이 궁금하다면
+        </summary>
+        <ul className="mt-2 space-y-1.5 text-xs leading-relaxed">
+          <li>
+            • <b className="text-pitch-50">배당률(×)</b>: 맞혔을 때 건 칩이 몇
+            배가 되는지. <b>적게 몰린 곳일수록 높아요.</b> 마감 전까지 계속 변해요.
+          </li>
+          <li>
+            • <b className="text-pitch-50">파리뮤추얼</b>(우승팀·득점왕·빅매치 등):
+            한 곳을 골라 베팅 → 정답 맞힌 사람끼리 전체 칩을 나눠 가져요.
+          </li>
+          <li>
+            • <b className="text-pitch-50">풀셰어</b>(진출팀): 여러 팀을 골라
+            베팅 → 맞힌 팀에 건 칩 비율만큼 전체 칩을 나눠 가져요.
+          </li>
+          <li>
+            • 보유 칩을 넘는 베팅은 불가, 취소도 불가. 마감 전까지 추가 베팅은
+            가능해요.
+          </li>
+        </ul>
+      </details>
 
       <AddCategoryPanel
         teams={teams}
@@ -122,8 +156,8 @@ export default function BetPage() {
           아직 카테고리가 없어요. 위에서 추가해보세요.
         </p>
       ) : (
-        <div className="space-y-3">
-          {categories.map((c) => (
+        <div className="space-y-2">
+          {sortedCategories.map((c) => (
             <CategoryCard
               key={c.id}
               category={c}
