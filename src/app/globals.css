@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+/*
+ * 월드컵 베팅 게임 테마
+ * 팔레트: 잔디 그린(pitch) + 트로피 골드(gold) 포인트, 다크 모드 기본.
+ * (FIFA 공식 로고/엠블럼/마스코트 미사용 — 오리지널 축구 테마)
+ */
+@theme {
+  --color-pitch-50: #ecfdf3;
+  --color-pitch-400: #34d399;
+  --color-pitch-500: #10b981;
+  --color-pitch-600: #059669;
+  --color-pitch-700: #047857;
+  --color-pitch-900: #052e1b;
+  --color-gold-300: #fcd34d;
+  --color-gold-400: #fbbf24;
+  --color-gold-500: #f59e0b;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #05140d;
+  background-image: radial-gradient(
+      circle at 50% -10%,
+      rgba(16, 185, 129, 0.18),
+      transparent 55%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.02) 0px,
+      rgba(255, 255, 255, 0.02) 1px,
+      transparent 1px,
+      transparent 64px
+    );
+  color: #e6f4ec;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
