@@ -77,6 +77,19 @@ export type BetWithNames = Bet & {
   options: { label: string } | null;
 };
 
+export type Settlement = {
+  id: string;
+  player_id: string;
+  category_id: string;
+  payout: number;
+  net: number;
+  created_at: string;
+};
+
+export type SettlementWithNames = Settlement & {
+  players: { nickname: string } | null;
+};
+
 /** localStorage 에 저장하는 세션 (CLAUDE.md §2) */
 export type Session = {
   roomCode: string;

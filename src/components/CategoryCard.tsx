@@ -10,6 +10,7 @@ import {
   statusLabel,
 } from "@/lib/categories";
 import { aggregateBets, placeBet } from "@/lib/bets";
+import { resolveCategory } from "@/lib/settlements";
 import type {
   BetWithNames,
   CategoryWithOptions,
@@ -69,8 +70,16 @@ export default function CategoryCard({
   const [betError, setBetError] = useState<string | null>(null);
   const [betting, setBetting] = useState(false);
 
+  // 정산 패널 상태
+  const [correct, setCorrect] = useState<Set<string>>(new Set());
+  const [confirmResolve, setConfirmResolve] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+
   const badge = statusLabel(category.status);
   const isOpen = category.status === "open";
+  const isLocked = category.status === "locked";
+  const isResolved = category.status === "resolved";
   const isParimutuel = category.settlement_type === "parimutuel";
   const options = useMemo(() => category.options ?? [], [category.options]);
   const usedTeamIds = options
@@ -139,6 +148,44 @@ export default function CategoryCard({
     }
   }
 
+  function toggleCorrect(optionId: string) {
+    setResolveError(null);
+    setCorrect((prev) => {
+      if (category.multi_select) {
+        const next = new Set(prev);
+        if (next.has(optionId)) next.delete(optionId);
+        else next.add(optionId);
+        return next;
+      }
+      // 단일 정답: 라디오처럼 하나만
+      return prev.has(optionId) ? new Set() : new Set([optionId]);
+    });
+  }
+
+  async function handleResolve() {
+    if (correct.size === 0) {
+      setResolveError("정답 옵션을 한 개 이상 선택하세요.");
+      return;
+    }
+    setResolving(true);
+    setResolveError(null);
+    try {
+      await resolveCategory({
+        categoryId: category.id,
+        correctOptionIds: [...correct],
+        playerId,
+      });
+      setConfirmResolve(false);
+      onChanged();
+      onBet();
+    } catch (e) {
+      setResolveError(e instanceof Error ? e.message : "정산에 실패했어요.");
+      setConfirmResolve(false);
+    } finally {
+      setResolving(false);
+    }
+  }
+
   function optionStat(optionId: string) {
     const pool = agg.byOption.get(optionId) ?? 0;
     const sharePct = agg.total > 0 ? (pool / agg.total) * 100 : 0;
@@ -204,9 +251,11 @@ export default function CategoryCard({
                 }
                 className={[
                   "relative w-full overflow-hidden rounded-lg border px-3 py-2 text-left transition-colors",
-                  selected
-                    ? "border-gold-500/60 bg-gold-500/10"
-                    : "border-pitch-700/40 bg-[#06180f]",
+                  isResolved && o.is_correct
+                    ? "border-emerald-500/60 bg-emerald-500/10"
+                    : selected
+                      ? "border-gold-500/60 bg-gold-500/10"
+                      : "border-pitch-700/40 bg-[#06180f]",
                   isOpen ? "hover:border-gold-500/40" : "cursor-default",
                 ].join(" ")}
               >
@@ -218,6 +267,11 @@ export default function CategoryCard({
                 />
                 <span className="relative flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
+                    {isResolved && o.is_correct && (
+                      <span className="shrink-0 text-emerald-400" aria-hidden>
+                        ✓
+                      </span>
+                    )}
                     <span className="truncate text-sm text-pitch-50">
                       {o.label}
                     </span>
@@ -339,11 +393,70 @@ export default function CategoryCard({
         </div>
       )}
 
-      {!isOpen && (
-        <p className="mt-3 text-xs text-pitch-50/40">
-          {category.status === "locked"
-            ? "마감됨 — 더 이상 베팅할 수 없어요. (정산은 Stage 5)"
-            : "정산 완료된 카테고리예요."}
+      {/* 정산 패널 (마감 상태) */}
+      {isLocked && (
+        <div className="mt-3 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3">
+          <p className="text-sm font-semibold text-pitch-50">
+            정산하기{" "}
+            <span className="text-xs font-normal text-pitch-50/50">
+              · 정답 {category.multi_select ? "(복수 선택)" : "(하나 선택)"}
+            </span>
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {options.map((o) => {
+              const chosen = correct.has(o.id);
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => toggleCorrect(o.id)}
+                  className={[
+                    "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                    chosen
+                      ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-300"
+                      : "border-pitch-700/40 bg-[#06180f] text-pitch-50/70 hover:border-emerald-500/30",
+                  ].join(" ")}
+                >
+                  {chosen ? "✓ " : ""}
+                  {o.label}
+                </button>
+              );
+            })}
+            {options.length === 0 && (
+              <span className="text-xs text-pitch-50/40">
+                옵션이 없어 정산할 수 없어요.
+              </span>
+            )}
+          </div>
+
+          {resolveError && (
+            <p className="mt-2 text-xs text-red-300">{resolveError}</p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              if (correct.size === 0) {
+                setResolveError("정답 옵션을 한 개 이상 선택하세요.");
+                return;
+              }
+              setResolveError(null);
+              setConfirmResolve(true);
+            }}
+            disabled={resolving || options.length === 0}
+            className="mt-3 w-full rounded-lg bg-sky-500 py-2.5 text-sm font-bold text-[#04121a] hover:bg-sky-400 disabled:opacity-50"
+          >
+            {resolving ? "정산 중…" : "정답 확정하고 정산하기"}
+          </button>
+          <p className="mt-1.5 text-center text-[11px] text-pitch-50/40">
+            정산하면 칩이 분배돼요. 되돌릴 수 없어요.
+          </p>
+        </div>
+      )}
+
+      {isResolved && (
+        <p className="mt-3 text-xs text-emerald-300/80">
+          ✓ 정산 완료 — 결과는 정산 내역 탭에서 볼 수 있어요.
         </p>
       )}
 
@@ -408,6 +521,20 @@ export default function CategoryCard({
         busy={busy}
         onConfirm={handleLock}
         onCancel={() => setConfirmLock(false)}
+      />
+
+      <ConfirmModal
+        open={confirmResolve}
+        title="정산 확정"
+        message={`'${category.name}'을(를) 정산할까요?\n정답: ${options
+          .filter((o) => correct.has(o.id))
+          .map((o) => o.label)
+          .join(", ")}\n\n칩이 자동 분배되며 되돌릴 수 없어요.`}
+        confirmText="정산하기"
+        danger
+        busy={resolving}
+        onConfirm={handleResolve}
+        onCancel={() => setConfirmResolve(false)}
       />
     </div>
   );
