@@ -62,6 +62,21 @@ export type Option = {
 
 export type CategoryWithOptions = Category & { options: Option[] };
 
+export type Bet = {
+  id: string;
+  player_id: string;
+  category_id: string;
+  option_id: string;
+  amount: number;
+  created_at: string;
+};
+
+/** 베팅 + 참가자 닉네임 + 옵션 라벨 (라이브/배당 표시용) */
+export type BetWithNames = Bet & {
+  players: { nickname: string } | null;
+  options: { label: string } | null;
+};
+
 /** localStorage 에 저장하는 세션 (CLAUDE.md §2) */
 export type Session = {
   roomCode: string;
