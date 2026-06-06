@@ -20,9 +20,12 @@
 - **백엔드/DB**: Supabase (PostgreSQL + 실시간 구독)
 - **프론트엔드**: Next.js + React + TypeScript + Tailwind CSS
 - **호스팅**: Vercel
-- **인증**: Supabase Auth 사용하지 않음. "방 코드 + 닉네임" 방식.
-  - 재접속 위해 `localStorage`에 `{ roomCode, playerId, nickname }` 저장
-  - 같은 방에서 같은 닉네임 재입력 시 → 기존 플레이어로 복귀(새로 만들지 않음)
+- **인증**: Supabase Auth 사용하지 않음. **"닉네임 + 비밀번호" 로그인** 방식. (친구들만 쓰므로 단일 공유 게임)
+  - 방 코드/방 만들기 없음. 모두가 하나의 게임(rooms.code='MAIN')을 공유한다.
+  - 처음 보는 닉네임 → 입력한 비밀번호로 계정 자동 생성(칩 지급). 기존 닉네임 → 비밀번호 일치 시 복귀.
+  - 비밀번호는 `pgcrypto`(bcrypt) 해시로 저장하고, 로그인은 RPC `login_player`로 서버에서 검증.
+  - 재접속 위해 `localStorage`에 `{ playerId, nickname }` 저장 (비밀번호는 저장 안 함).
+  - 셋업: `supabase/single_game_setup.sql` (단일 게임 + 48팀 + 비밀번호 컬럼 + login_player).
 
 ## 3. 핵심 게임 규칙
 
@@ -243,12 +246,11 @@ alter publication supabase_realtime add table activity_log;
 
 ## 8. 사용자 플로우
 
-1. **첫 진입**: "방 만들기" or "코드로 입장" 분기 화면
-2. **방 만들기**: 방 이름 + 대회명 + 닉네임 입력 → 6자리 코드 자동 생성 → 월드컵 48팀 템플릿이 `teams`에 자동 세팅
-3. **코드로 입장**: 코드 입력 + 닉네임 입력 → 방 참여 (`initial_chips` 지급)
-   - **공유 링크에 코드 심기**: `.../join?code=ABC123` 링크를 누르면 코드 자동 입력
-4. **메인 화면**: 조별 명단 + 4개 탭 진입 → 베팅 시작
-5. **세션 유지**: `localStorage`에 `{ roomCode, playerId, nickname }` 저장 → 다음 방문 시 자동 재접속
+1. **첫 진입**: 닉네임 + 비밀번호 로그인 화면 (방 만들기/코드 없음)
+2. **로그인**: 닉네임 + 비밀번호 입력 → 처음이면 계정 자동 생성(`initial_chips` 지급), 기존이면 비밀번호 확인 후 복귀
+3. **단일 게임**: 모두가 같은 게임(code='MAIN', 48팀 자동 세팅)을 공유
+4. **메인 화면**: 참가자 + 조별 명단 + 4개 탭 진입 → 베팅 시작
+5. **세션 유지**: `localStorage`에 `{ playerId, nickname }` 저장 → 다음 방문 시 자동 재접속
 
 ## 9. 디자인 방향 (월드컵 느낌)
 

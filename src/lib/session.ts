@@ -9,8 +9,8 @@ export function loadSession(): Session | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<Session>;
-    if (parsed.roomCode && parsed.playerId && parsed.nickname) {
-      return parsed as Session;
+    if (parsed.playerId && parsed.nickname) {
+      return { playerId: parsed.playerId, nickname: parsed.nickname };
     }
     return null;
   } catch {

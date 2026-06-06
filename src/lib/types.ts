@@ -90,9 +90,8 @@ export type SettlementWithNames = Settlement & {
   players: { nickname: string } | null;
 };
 
-/** localStorage 에 저장하는 세션 (CLAUDE.md §2) */
+/** localStorage 에 저장하는 세션 (닉네임+비밀번호 로그인) */
 export type Session = {
-  roomCode: string;
   playerId: string;
   nickname: string;
 };
