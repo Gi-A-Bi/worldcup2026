@@ -3,14 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchCategories, settlementLabel, statusLabel } from "@/lib/categories";
 import { aggregateBets, fetchBetsForCategories } from "@/lib/bets";
+import { fetchTeams } from "@/lib/rooms";
 import { fetchSettlementsForCategories } from "@/lib/settlements";
 import { supabase } from "@/lib/supabase";
 import type {
   BetWithNames,
   CategoryWithOptions,
   SettlementWithNames,
+  Team,
 } from "@/lib/types";
 import { useSession } from "@/components/SessionProvider";
+import ResultEntry from "@/components/ResultEntry";
 
 export default function SettlementsPage() {
   const { room, player } = useSession();
@@ -19,7 +22,15 @@ export default function SettlementsPage() {
   const [categories, setCategories] = useState<CategoryWithOptions[]>([]);
   const [settlements, setSettlements] = useState<SettlementWithNames[]>([]);
   const [bets, setBets] = useState<BetWithNames[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!roomId) return;
+    fetchTeams(roomId)
+      .then(setTeams)
+      .catch(() => {});
+  }, [roomId]);
 
   const refresh = useCallback(() => {
     if (!roomId) return;
@@ -102,10 +113,60 @@ export default function SettlementsPage() {
         <p className="py-6 text-center text-sm text-pitch-50/40">불러오는 중…</p>
       ) : (
         <>
+          {/* 경기 결과 입력 (정산 대기) */}
+          {pending.length > 0 && (
+            <section className="space-y-3">
+              <div>
+                <h2 className="text-sm font-semibold text-pitch-50/90">
+                  📥 경기 결과 입력{" "}
+                  <span className="text-pitch-50/40">({pending.length})</span>
+                </h2>
+                <p className="text-xs text-pitch-50/50">
+                  실제 결과를 입력하면 자동으로 정산돼 아래 “정산 완료”에
+                  표시돼요. (마감 안 했어도 입력 가능)
+                </p>
+              </div>
+              {pending.map((c) => {
+                const badge = statusLabel(c.status);
+                return (
+                  <div
+                    key={c.id}
+                    className="rounded-2xl border border-pitch-700/40 bg-pitch-900/30 p-4"
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <h3 className="truncate text-base font-bold text-pitch-50">
+                        {c.name}
+                      </h3>
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}
+                      >
+                        {badge.text}
+                      </span>
+                    </div>
+                    {c.options.length === 0 ? (
+                      <p className="text-xs text-pitch-50/40">
+                        옵션이 없어 정산할 수 없어요. (베팅 탭에서 옵션 추가)
+                      </p>
+                    ) : (
+                      <ResultEntry
+                        category={c}
+                        teams={teams}
+                        player={player}
+                        bets={betsByCategory.get(c.id) ?? []}
+                        onResolved={refresh}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </section>
+          )}
+
           {/* 정산 완료 결과 */}
+          <h2 className="text-sm font-semibold text-pitch-50/90">✅ 정산 완료</h2>
           {resolved.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-pitch-700/40 py-8 text-center text-sm text-pitch-50/40">
-              아직 정산된 카테고리가 없어요.
+              아직 정산된 경기가 없어요.
             </p>
           ) : (
             <div className="space-y-3">
@@ -213,33 +274,6 @@ export default function SettlementsPage() {
                 );
               })}
             </div>
-          )}
-
-          {/* 정산 대기 */}
-          {pending.length > 0 && (
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-pitch-50/70">
-                정산 대기 ({pending.length})
-              </h2>
-              <ul className="space-y-1.5">
-                {pending.map((c) => {
-                  const badge = statusLabel(c.status);
-                  return (
-                    <li
-                      key={c.id}
-                      className="flex items-center justify-between rounded-lg border border-pitch-700/40 bg-[#06180f] px-3 py-2"
-                    >
-                      <span className="text-sm text-pitch-50/80">{c.name}</span>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}
-                      >
-                        {badge.text}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
           )}
         </>
       )}
