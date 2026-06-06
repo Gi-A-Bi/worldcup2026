@@ -10,7 +10,6 @@ import {
   statusLabel,
 } from "@/lib/categories";
 import { aggregateBets, placeBet } from "@/lib/bets";
-import { resolveCategory } from "@/lib/settlements";
 import type {
   BetWithNames,
   CategoryWithOptions,
@@ -19,6 +18,7 @@ import type {
 } from "@/lib/types";
 import ConfirmModal from "@/components/ConfirmModal";
 import OptionSelector from "@/components/OptionSelector";
+import ResultEntry from "@/components/ResultEntry";
 import TeamMultiPicker from "@/components/TeamMultiPicker";
 
 const SETTLE_WHEN: Record<string, string> = {
@@ -81,12 +81,6 @@ export default function CategoryCard({
   const [betError, setBetError] = useState<string | null>(null);
   const [betting, setBetting] = useState(false);
 
-  // 정산
-  const [correct, setCorrect] = useState<Set<string>>(new Set());
-  const [confirmResolve, setConfirmResolve] = useState(false);
-  const [resolving, setResolving] = useState(false);
-  const [resolveError, setResolveError] = useState<string | null>(null);
-
   const badge = statusLabel(category.status);
   const isOpen = category.status === "open";
   const isLocked = category.status === "locked";
@@ -106,19 +100,6 @@ export default function CategoryCard({
   function togglePick(optionId: string) {
     setBetError(null);
     setPicks((prev) => {
-      if (isMulti) {
-        const next = new Set(prev);
-        if (next.has(optionId)) next.delete(optionId);
-        else next.add(optionId);
-        return next;
-      }
-      return prev.has(optionId) ? new Set() : new Set([optionId]);
-    });
-  }
-
-  function toggleCorrect(optionId: string) {
-    setResolveError(null);
-    setCorrect((prev) => {
       if (isMulti) {
         const next = new Set(prev);
         if (next.has(optionId)) next.delete(optionId);
@@ -193,30 +174,6 @@ export default function CategoryCard({
       onBet();
     } finally {
       setBetting(false);
-    }
-  }
-
-  async function handleResolve() {
-    if (correct.size === 0) {
-      setResolveError("정답을 한 개 이상 선택하세요.");
-      return;
-    }
-    setResolving(true);
-    setResolveError(null);
-    try {
-      await resolveCategory({
-        categoryId: category.id,
-        correctOptionIds: [...correct],
-        playerId,
-      });
-      setConfirmResolve(false);
-      onChanged();
-      onBet();
-    } catch (e) {
-      setResolveError(e instanceof Error ? e.message : "정산에 실패했어요.");
-      setConfirmResolve(false);
-    } finally {
-      setResolving(false);
     }
   }
 
@@ -446,56 +403,19 @@ export default function CategoryCard({
             </>
           )}
 
-          {/* ===== 마감: 정산 ===== */}
+          {/* ===== 마감: 결과 입력 → 자동 정산 ===== */}
           {isLocked && (
-            <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-3">
-              <p className="text-sm font-semibold text-pitch-50">
-                정산하기{" "}
-                <span className="text-xs font-normal text-pitch-50/50">
-                  · 정답 {isMulti ? "(여러 개 선택)" : "(하나 선택)"}
-                </span>
-              </p>
-              <p className="mb-2 mt-1 text-[11px] text-pitch-50/50">
-                실제 결과(정답)를 선택하고 정산하면 칩이 자동 분배돼요.
-              </p>
-              {options.length === 0 ? (
-                <p className="text-xs text-pitch-50/40">
-                  옵션이 없어 정산할 수 없어요.
-                </p>
-              ) : (
-                <OptionSelector
-                  options={options}
-                  teams={teams}
-                  selected={correct}
-                  onToggle={toggleCorrect}
-                  accent="emerald"
-                  agg={agg}
-                  isParimutuel={isParimutuel}
-                  playerId={playerId}
-                />
-              )}
-              {resolveError && (
-                <p className="mt-2 text-xs text-red-300">{resolveError}</p>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  if (correct.size === 0) {
-                    setResolveError("정답을 한 개 이상 선택하세요.");
-                    return;
-                  }
-                  setResolveError(null);
-                  setConfirmResolve(true);
-                }}
-                disabled={resolving || options.length === 0}
-                className="mt-3 w-full rounded-lg bg-sky-500 py-2.5 text-sm font-bold text-[#04121a] hover:bg-sky-400 disabled:opacity-50"
-              >
-                {resolving ? "정산 중…" : "정답 확정하고 정산하기"}
-              </button>
-              <p className="mt-1.5 text-center text-[11px] text-pitch-50/40">
-                정산하면 되돌릴 수 없어요.
-              </p>
-            </div>
+            <ResultEntry
+              category={category}
+              teams={teams}
+              player={player}
+              bets={bets}
+              defaultOpen
+              onResolved={() => {
+                onChanged();
+                onBet();
+              }}
+            />
           )}
 
           {/* ===== 정산됨: 결과 요약 ===== */}
@@ -534,20 +454,6 @@ export default function CategoryCard({
         busy={busy}
         onConfirm={handleLock}
         onCancel={() => setConfirmLock(false)}
-      />
-
-      <ConfirmModal
-        open={confirmResolve}
-        title="정산 확정"
-        message={`'${category.name}'을(를) 정산할까요?\n정답: ${options
-          .filter((o) => correct.has(o.id))
-          .map((o) => o.label)
-          .join(", ")}\n\n칩이 자동 분배되며 되돌릴 수 없어요.`}
-        confirmText="정산하기"
-        danger
-        busy={resolving}
-        onConfirm={handleResolve}
-        onCancel={() => setConfirmResolve(false)}
       />
     </div>
   );
