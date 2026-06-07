@@ -5,6 +5,7 @@ const LOGIN_ERROR_MESSAGES: Record<string, string> = {
   NICKNAME_REQUIRED: "닉네임을 입력해주세요.",
   PASSWORD_REQUIRED: "비밀번호를 입력해주세요.",
   WRONG_PASSWORD: "비밀번호가 일치하지 않아요.",
+  PLAYER_NOT_FOUND: "참가자를 찾을 수 없어요.",
   NO_GAME: "게임이 아직 준비되지 않았어요. (single_game_setup.sql 실행 필요)",
 };
 
@@ -33,4 +34,27 @@ export async function loginPlayer(
     throw error;
   }
   return data as Player;
+}
+
+/** 참가자 삭제 (그 사람의 비밀번호 확인). 베팅/정산/기록 함께 삭제. */
+export async function deletePlayer(
+  nickname: string,
+  password: string
+): Promise<void> {
+  const { error } = await supabase.rpc("delete_player", {
+    p_nickname: nickname,
+    p_password: password,
+  });
+  if (error) {
+    const code = Object.keys(LOGIN_ERROR_MESSAGES).find((c) =>
+      error.message.includes(c)
+    );
+    if (code) throw new Error(LOGIN_ERROR_MESSAGES[code]);
+    if (error.message.includes("delete_player")) {
+      throw new Error(
+        "삭제 함수가 아직 없어요. supabase/delete_player.sql 을 실행해주세요."
+      );
+    }
+    throw error;
+  }
 }
