@@ -26,7 +26,8 @@ export default function BetPage() {
   const [betLocks, setBetLocks] = useState<BetLock[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const refreshCategories = useCallback(() => {
+  // 카테고리 + 베팅 + 확정을 한 번에 새로고침 (roomId 에만 의존 → 재구독 루프 방지)
+  const refreshAll = useCallback(() => {
     if (!roomId) return;
     fetchCategories(roomId)
       .then(async (cats) => {
@@ -43,27 +44,11 @@ export default function BetPage() {
       .finally(() => setLoading(false));
   }, [roomId]);
 
-  const categoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
-
-  const refreshBets = useCallback(() => {
-    if (categoryIds.length === 0) return;
-    fetchBetsForCategories(categoryIds)
-      .then(setBets)
-      .catch(() => {});
-  }, [categoryIds]);
-
-  const refreshLocks = useCallback(() => {
-    if (categoryIds.length === 0) return;
-    fetchBetLocks(categoryIds)
-      .then(setBetLocks)
-      .catch(() => {});
-  }, [categoryIds]);
-
-  // 베팅 직후: 베팅 목록 + 내 보유 칩 갱신
+  // 베팅 직후: 목록 갱신 + 내 보유 칩 갱신
   const handleBet = useCallback(() => {
-    refreshBets();
+    refreshAll();
     void reload();
-  }, [refreshBets, reload]);
+  }, [refreshAll, reload]);
 
   // 팀은 한 번만 로드
   useEffect(() => {
@@ -73,10 +58,10 @@ export default function BetPage() {
       .catch(() => {});
   }, [roomId]);
 
-  // 카테고리/옵션 + 베팅: 최초 로드 + Realtime 구독
+  // 최초 로드 + Realtime 구독 (변경 시 전체 새로고침)
   useEffect(() => {
     if (!roomId) return;
-    refreshCategories();
+    refreshAll();
     const channel = supabase
       .channel(`room-bet-${roomId}`)
       .on(
@@ -87,28 +72,28 @@ export default function BetPage() {
           table: "categories",
           filter: `room_id=eq.${roomId}`,
         },
-        () => refreshCategories()
+        () => refreshAll()
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "options" },
-        () => refreshCategories()
+        () => refreshAll()
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bets" },
-        () => refreshBets()
+        () => refreshAll()
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bet_locks" },
-        () => refreshLocks()
+        () => refreshAll()
       )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [roomId, refreshCategories, refreshBets, refreshLocks]);
+  }, [roomId, refreshAll]);
 
   const betsByCategory = useMemo(() => {
     const map = new Map<string, BetWithNames[]>();
@@ -137,12 +122,12 @@ export default function BetPage() {
       try {
         if (currentlyConfirmed) await unconfirmBets(player.id, categoryId);
         else await confirmBets(player.id, categoryId);
-        refreshLocks();
+        refreshAll();
       } catch {
         // 무시 (실시간 구독이 보정)
       }
     },
-    [player, refreshLocks]
+    [player, refreshAll]
   );
 
   // 열림 → 마감 → 정산됨 순으로 정렬 (목록)
@@ -180,8 +165,9 @@ export default function BetPage() {
             한 곳을 골라 베팅 → 정답 맞힌 사람끼리 전체 칩을 나눠 가져요.
           </li>
           <li>
-            • <b className="text-pitch-50">풀셰어</b>(진출팀): 여러 팀을 골라
-            베팅 → 맞힌 팀에 건 칩 비율만큼 전체 칩을 나눠 가져요.
+            • <b className="text-pitch-50">희소성 분배</b>(진출팀): 팀당 고정
+            칩으로 32팀 선택 → 전체 칩을 진출팀 수로 나눠 각 팀 몫을 그 팀 고른
+            사람끼리 분배. <b>남이 적게 고른 진출팀 적중일수록 큰 이익.</b>
           </li>
           <li>
             • 보유 칩을 넘는 베팅은 불가, 취소도 불가. 마감 전까지 추가 베팅은
@@ -194,7 +180,7 @@ export default function BetPage() {
         teams={teams}
         roomId={room.id}
         playerId={player.id}
-        onCreated={refreshCategories}
+        onCreated={refreshAll}
       />
 
       {loading ? (
@@ -222,7 +208,7 @@ export default function BetPage() {
                 onToggleConfirm={() =>
                   toggleConfirm(c.id, confirmedSet?.has(player.id) ?? false)
                 }
-                onChanged={refreshCategories}
+                onChanged={refreshAll}
                 onBet={handleBet}
               />
             );
