@@ -3,9 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchCategories } from "@/lib/categories";
 import { fetchBetsForCategories } from "@/lib/bets";
+import { confirmBets, fetchBetLocks, unconfirmBets } from "@/lib/betlocks";
 import { fetchTeams } from "@/lib/rooms";
 import { supabase } from "@/lib/supabase";
-import type { BetWithNames, CategoryWithOptions, Team } from "@/lib/types";
+import type {
+  BetLock,
+  BetWithNames,
+  CategoryWithOptions,
+  Team,
+} from "@/lib/types";
 import { useSession } from "@/components/SessionProvider";
 import AddCategoryPanel from "@/components/AddCategoryPanel";
 import CategoryCard from "@/components/CategoryCard";
@@ -17,6 +23,7 @@ export default function BetPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [categories, setCategories] = useState<CategoryWithOptions[]>([]);
   const [bets, setBets] = useState<BetWithNames[]>([]);
+  const [betLocks, setBetLocks] = useState<BetLock[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refreshCategories = useCallback(() => {
@@ -24,7 +31,13 @@ export default function BetPage() {
     fetchCategories(roomId)
       .then(async (cats) => {
         setCategories(cats);
-        setBets(await fetchBetsForCategories(cats.map((c) => c.id)));
+        const ids = cats.map((c) => c.id);
+        const [b, locks] = await Promise.all([
+          fetchBetsForCategories(ids),
+          fetchBetLocks(ids),
+        ]);
+        setBets(b);
+        setBetLocks(locks);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -36,6 +49,13 @@ export default function BetPage() {
     if (categoryIds.length === 0) return;
     fetchBetsForCategories(categoryIds)
       .then(setBets)
+      .catch(() => {});
+  }, [categoryIds]);
+
+  const refreshLocks = useCallback(() => {
+    if (categoryIds.length === 0) return;
+    fetchBetLocks(categoryIds)
+      .then(setBetLocks)
       .catch(() => {});
   }, [categoryIds]);
 
@@ -79,11 +99,16 @@ export default function BetPage() {
         { event: "*", schema: "public", table: "bets" },
         () => refreshBets()
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bet_locks" },
+        () => refreshLocks()
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [roomId, refreshCategories, refreshBets]);
+  }, [roomId, refreshCategories, refreshBets, refreshLocks]);
 
   const betsByCategory = useMemo(() => {
     const map = new Map<string, BetWithNames[]>();
@@ -94,6 +119,31 @@ export default function BetPage() {
     }
     return map;
   }, [bets]);
+
+  // 카테고리별 확정한 player_id 집합
+  const confirmedByCategory = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const l of betLocks) {
+      const set = map.get(l.category_id) ?? new Set<string>();
+      set.add(l.player_id);
+      map.set(l.category_id, set);
+    }
+    return map;
+  }, [betLocks]);
+
+  const toggleConfirm = useCallback(
+    async (categoryId: string, currentlyConfirmed: boolean) => {
+      if (!player) return;
+      try {
+        if (currentlyConfirmed) await unconfirmBets(player.id, categoryId);
+        else await confirmBets(player.id, categoryId);
+        refreshLocks();
+      } catch {
+        // 무시 (실시간 구독이 보정)
+      }
+    },
+    [player, refreshLocks]
+  );
 
   // 열림 → 마감 → 정산됨 순으로 정렬 (목록)
   const sortedCategories = useMemo(() => {
@@ -157,18 +207,26 @@ export default function BetPage() {
         </p>
       ) : (
         <div className="space-y-2">
-          {sortedCategories.map((c) => (
-            <CategoryCard
-              key={c.id}
-              category={c}
-              teams={teams}
-              player={player}
-              bets={betsByCategory.get(c.id) ?? []}
-              roomId={room.id}
-              onChanged={refreshCategories}
-              onBet={handleBet}
-            />
-          ))}
+          {sortedCategories.map((c) => {
+            const confirmedSet = confirmedByCategory.get(c.id);
+            return (
+              <CategoryCard
+                key={c.id}
+                category={c}
+                teams={teams}
+                player={player}
+                bets={betsByCategory.get(c.id) ?? []}
+                roomId={room.id}
+                iConfirmed={confirmedSet?.has(player.id) ?? false}
+                confirmedCount={confirmedSet?.size ?? 0}
+                onToggleConfirm={() =>
+                  toggleConfirm(c.id, confirmedSet?.has(player.id) ?? false)
+                }
+                onChanged={refreshCategories}
+                onBet={handleBet}
+              />
+            );
+          })}
         </div>
       )}
     </div>

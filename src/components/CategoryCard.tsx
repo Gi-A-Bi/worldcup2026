@@ -18,6 +18,7 @@ import type {
 } from "@/lib/types";
 import ConfirmModal from "@/components/ConfirmModal";
 import OptionSelector from "@/components/OptionSelector";
+import RarityAdvanceBet from "@/components/RarityAdvanceBet";
 import ResultEntry from "@/components/ResultEntry";
 import TeamMultiPicker from "@/components/TeamMultiPicker";
 
@@ -52,6 +53,9 @@ export default function CategoryCard({
   bets,
   roomId,
   defaultOpen = false,
+  iConfirmed = false,
+  confirmedCount = 0,
+  onToggleConfirm,
   onChanged,
   onBet,
 }: {
@@ -61,6 +65,9 @@ export default function CategoryCard({
   bets: BetWithNames[];
   roomId: string;
   defaultOpen?: boolean;
+  iConfirmed?: boolean;
+  confirmedCount?: number;
+  onToggleConfirm?: () => void;
   onChanged: () => void;
   onBet: () => void;
 }) {
@@ -86,6 +93,7 @@ export default function CategoryCard({
   const isLocked = category.status === "locked";
   const isResolved = category.status === "resolved";
   const isParimutuel = category.settlement_type === "parimutuel";
+  const isRarity = category.settlement_type === "rarity_share";
   const isMulti = category.multi_select;
   const options = useMemo(() => category.options ?? [], [category.options]);
   const usedTeamIds = options
@@ -224,9 +232,54 @@ export default function CategoryCard({
           {/* ===== 열림: 베팅 ===== */}
           {isOpen && (
             <>
-              <p className="mb-3 rounded-lg bg-pitch-600/10 px-3 py-2 text-xs leading-relaxed text-pitch-50/70">
-                {helpText(isParimutuel)}
-              </p>
+              {isRarity && (
+                <RarityAdvanceBet
+                  category={category}
+                  teams={teams}
+                  player={player}
+                  bets={bets}
+                  iConfirmed={iConfirmed}
+                  confirmedCount={confirmedCount}
+                  onToggleConfirm={onToggleConfirm}
+                  onBet={onBet}
+                />
+              )}
+
+              {!isRarity && (
+                <>
+              {/* 개인 확정 상태 */}
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-pitch-50/50">
+                  ✅ 베팅 확정 {confirmedCount}명
+                </span>
+                {onToggleConfirm && (
+                  <button
+                    type="button"
+                    onClick={onToggleConfirm}
+                    className={[
+                      "rounded-lg border px-3 py-1.5 text-xs font-semibold",
+                      iConfirmed
+                        ? "border-pitch-700/50 text-pitch-50/70 hover:text-pitch-50"
+                        : "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20",
+                    ].join(" ")}
+                  >
+                    {iConfirmed ? "내 베팅 확정 해제" : "내 베팅 확정"}
+                  </button>
+                )}
+              </div>
+
+              {iConfirmed && (
+                <p className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                  ✅ 내 베팅을 확정했어요. 더 베팅하려면 “내 베팅 확정 해제”를
+                  누르세요.
+                </p>
+              )}
+
+              {!iConfirmed && (
+                <p className="mb-3 rounded-lg bg-pitch-600/10 px-3 py-2 text-xs leading-relaxed text-pitch-50/70">
+                  {helpText(isParimutuel)}
+                </p>
+              )}
 
               {options.length === 0 ? (
                 <p className="text-xs text-pitch-50/40">
@@ -242,11 +295,12 @@ export default function CategoryCard({
                   agg={agg}
                   isParimutuel={isParimutuel}
                   playerId={playerId}
+                  disabled={iConfirmed}
                 />
               )}
 
               {/* 베팅 바 */}
-              {pickCount > 0 && (
+              {!iConfirmed && pickCount > 0 && (
                 <div className="mt-3 rounded-xl border border-gold-500/30 bg-gold-500/5 p-3">
                   <div className="mb-2 flex items-center justify-between text-xs">
                     <span className="font-semibold text-pitch-50">
@@ -304,6 +358,8 @@ export default function CategoryCard({
                   </p>
                 </div>
               )}
+                </>
+              )}
 
               {/* 옵션 관리 */}
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -319,8 +375,9 @@ export default function CategoryCard({
                   onClick={() => setConfirmLock(true)}
                   disabled={busy}
                   className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                  title="모든 참가자의 베팅을 마감합니다 (전체 적용)"
                 >
-                  마감하기
+                  전체 마감하기
                 </button>
               </div>
 
@@ -447,8 +504,8 @@ export default function CategoryCard({
 
       <ConfirmModal
         open={confirmLock}
-        title="카테고리 마감"
-        message={`'${category.name}' 카테고리를 마감할까요?\n마감하면 더 이상 베팅/옵션 변경을 할 수 없어요. (되돌릴 수 없음)`}
+        title="카테고리 마감 (전체 적용)"
+        message={`'${category.name}'을(를) 마감할까요?\n마감하면 나뿐 아니라 모든 참가자가 이 게임에 더 이상 베팅할 수 없어요.\n(전체 적용 · 되돌릴 수 없음)`}
         confirmText="마감하기"
         danger
         busy={busy}

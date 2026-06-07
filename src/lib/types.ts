@@ -34,7 +34,7 @@ export type CategoryType =
   | "knockout"
   | "custom";
 
-export type SettlementType = "parimutuel" | "pool_share";
+export type SettlementType = "parimutuel" | "pool_share" | "rarity_share";
 
 export type CategoryStatus = "open" | "locked" | "resolved";
 
@@ -88,6 +88,14 @@ export type Settlement = {
 
 export type SettlementWithNames = Settlement & {
   players: { nickname: string } | null;
+};
+
+/** 개인 베팅 확정(개인 마감) */
+export type BetLock = {
+  id: string;
+  player_id: string;
+  category_id: string;
+  created_at: string;
 };
 
 /** localStorage 에 저장하는 세션 (닉네임+비밀번호 로그인) */

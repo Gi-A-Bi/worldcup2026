@@ -3,6 +3,7 @@
 import { WORLD_CUP_GROUPS } from "@/lib/worldcupTeams";
 import type { BetAggregate } from "@/lib/bets";
 import type { Option, Team } from "@/lib/types";
+import Flag from "@/components/Flag";
 
 /**
  * 옵션 선택기. 팀 기반(모든 옵션에 team_id)이면 조별(A~L)로 묶어 보여주고,
@@ -82,9 +83,7 @@ export default function OptionSelector({
               ✓
             </span>
             {team?.flag_emoji && (
-              <span className="leading-none" aria-hidden>
-                {team.flag_emoji}
-              </span>
+              <Flag emoji={team.flag_emoji} code={team.fifa_code} />
             )}
             <span className="truncate text-sm text-pitch-50">
               {team ? team.name : o.label}
