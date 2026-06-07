@@ -40,3 +40,14 @@ body {
   color: #e6f4ec;
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
+
+/* 배경 컨페티가 천천히 떠다니는 효과 */
+@keyframes wc-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(18deg);
+  }
+}
