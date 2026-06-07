@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { deletePlayer } from "@/lib/auth";
 import { fetchPlayers, fetchTeams } from "@/lib/rooms";
 import { supabase } from "@/lib/supabase";
 import type { Player, Team } from "@/lib/types";
@@ -15,6 +16,12 @@ export default function HomePage() {
   const { room, player, signOut } = useSession();
   const [players, setPlayers] = useState<Player[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+
+  // 참가자 삭제 (비밀번호 확인)
+  const [delTarget, setDelTarget] = useState<Player | null>(null);
+  const [delPassword, setDelPassword] = useState("");
+  const [delError, setDelError] = useState<string | null>(null);
+  const [delBusy, setDelBusy] = useState(false);
 
   const roomId = room?.id;
 
@@ -54,6 +61,24 @@ export default function HomePage() {
       void supabase.removeChannel(channel);
     };
   }, [roomId, refresh]);
+
+  async function handleDelete() {
+    if (!delTarget) return;
+    setDelBusy(true);
+    setDelError(null);
+    try {
+      await deletePlayer(delTarget.nickname, delPassword);
+      const wasMe = delTarget.id === player?.id;
+      setDelTarget(null);
+      setDelPassword("");
+      if (wasMe) signOut();
+      else refresh();
+    } catch (e) {
+      setDelError(e instanceof Error ? e.message : "삭제에 실패했어요.");
+    } finally {
+      setDelBusy(false);
+    }
+  }
 
   if (!room || !player) return null;
 
@@ -107,9 +132,24 @@ export default function HomePage() {
                     </span>
                   )}
                 </span>
-                <span className="font-mono text-sm text-gold-300">
-                  {p.chips.toLocaleString()}
-                  <span className="ml-1 text-[10px] text-pitch-50/40">칩</span>
+                <span className="flex items-center gap-2">
+                  <span className="font-mono text-sm text-gold-300">
+                    {p.chips.toLocaleString()}
+                    <span className="ml-1 text-[10px] text-pitch-50/40">칩</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDelError(null);
+                      setDelPassword("");
+                      setDelTarget(p);
+                    }}
+                    className="rounded-md px-1.5 py-0.5 text-xs text-pitch-50/30 hover:bg-red-500/15 hover:text-red-400"
+                    aria-label={`${p.nickname} 삭제`}
+                    title="참가자 삭제 (비밀번호 확인)"
+                  >
+                    ✕
+                  </button>
                 </span>
               </li>
             );
@@ -163,6 +203,61 @@ export default function HomePage() {
           로그아웃
         </button>
       </section>
+
+      {/* 참가자 삭제 모달 (비밀번호 확인) */}
+      {delTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => !delBusy && setDelTarget(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-pitch-700/50 bg-[#06180f] p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold text-pitch-50">참가자 삭제</h3>
+            <p className="mt-2 text-sm text-pitch-50/70">
+              <b className="text-pitch-50">{delTarget.nickname}</b> 님을 삭제할까요?
+              그 사람의 베팅·정산·기록이 모두 사라져요. (되돌릴 수 없음)
+            </p>
+            <p className="mt-2 text-xs text-pitch-50/50">
+              확인을 위해 <b>{delTarget.nickname}</b> 님의 비밀번호를 입력하세요.
+            </p>
+            <input
+              type="password"
+              value={delPassword}
+              onChange={(e) => setDelPassword(e.target.value)}
+              placeholder="비밀번호"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && delPassword && !delBusy)
+                  void handleDelete();
+              }}
+              className="mt-3 w-full rounded-lg border border-pitch-700/50 bg-[#04130c] px-3 py-2.5 text-sm text-pitch-50 outline-none focus:border-red-500/60"
+            />
+            {delError && (
+              <p className="mt-2 text-xs text-red-300">{delError}</p>
+            )}
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDelTarget(null)}
+                disabled={delBusy}
+                className="flex-1 rounded-lg border border-pitch-700/50 py-2.5 text-sm font-medium text-pitch-50/70 hover:text-pitch-50 disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={delBusy || !delPassword}
+                className="flex-1 rounded-lg bg-red-500 py-2.5 text-sm font-bold text-white hover:bg-red-400 disabled:opacity-50"
+              >
+                {delBusy ? "삭제 중…" : "삭제하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
