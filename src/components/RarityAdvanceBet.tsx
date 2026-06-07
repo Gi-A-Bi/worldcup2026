@@ -86,6 +86,7 @@ export default function RarityAdvanceBet({
         {STAKE.toLocaleString()}칩 고정). 정산 때 전체 칩을 진출팀 수로 나눠, 각
         팀 몫을 <b className="text-pitch-50">그 팀 고른 사람끼리</b> 나눠 가져요.
         <b className="text-gold-300"> 남이 적게 고른 진출팀일수록 더 큰 이익!</b>{" "}
+        <b className="text-pitch-50">선택한 팀을 다시 누르면 취소(환불)</b>돼요.
         확정 전까지 자유롭게 바꿀 수 있어요.
       </p>
 

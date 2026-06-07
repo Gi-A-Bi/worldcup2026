@@ -4,12 +4,13 @@ import { useMemo, useState } from "react";
 import {
   addCustomOption,
   addTeamOptions,
+  deleteCategory,
   lockCategory,
   removeOption,
   settlementLabel,
   statusLabel,
 } from "@/lib/categories";
-import { aggregateBets, placeBet } from "@/lib/bets";
+import { aggregateBets, placeBet, removeBet } from "@/lib/bets";
 import type {
   BetWithNames,
   CategoryWithOptions,
@@ -87,6 +88,9 @@ export default function CategoryCard({
   const [amount, setAmount] = useState(1000);
   const [betError, setBetError] = useState<string | null>(null);
   const [betting, setBetting] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const badge = statusLabel(category.status);
   const isOpen = category.status === "open";
@@ -184,6 +188,43 @@ export default function CategoryCard({
       setBetting(false);
     }
   }
+
+  async function handleCancel(optionId: string) {
+    setBetError(null);
+    setCanceling(true);
+    try {
+      await removeBet({ playerId, categoryId: category.id, optionId });
+      onBet();
+    } catch (e) {
+      setBetError(e instanceof Error ? e.message : "취소에 실패했어요.");
+      onBet();
+    } finally {
+      setCanceling(false);
+    }
+  }
+
+  async function handleDelete() {
+    setConfirmDelete(false);
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteCategory(category.id, playerId);
+      onChanged();
+      onBet();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "삭제에 실패했어요.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  // 내가 이 카테고리에 건 베팅 (옵션별) — 취소용
+  const myBetOptions = options
+    .map((o) => ({
+      o,
+      mine: agg.byPlayerOption.get(`${playerId}:${o.id}`) ?? 0,
+    }))
+    .filter((x) => x.mine > 0);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-pitch-700/40 bg-pitch-900/30">
@@ -354,8 +395,31 @@ export default function CategoryCard({
                       : `${totalNeeded.toLocaleString()}칩 베팅하기`}
                   </button>
                   <p className="mt-1.5 text-center text-[11px] text-pitch-50/40">
-                    베팅은 취소할 수 없어요. 마감 전까지 추가 베팅 가능.
+                    마감·확정 전까지 추가 베팅·취소 가능.
                   </p>
+                </div>
+              )}
+
+              {/* 내 베팅 취소 */}
+              {!iConfirmed && myBetOptions.length > 0 && (
+                <div className="mt-3 rounded-xl border border-pitch-700/40 bg-[#04130c] p-3">
+                  <p className="mb-1.5 text-[11px] text-pitch-50/60">
+                    내 베팅 (✕ 눌러 취소·환불)
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {myBetOptions.map(({ o, mine }) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => handleCancel(o.id)}
+                        disabled={canceling}
+                        className="flex items-center gap-1 rounded-full border border-gold-500/40 bg-gold-500/10 px-2.5 py-1 text-xs text-gold-200 hover:border-red-500/40 hover:bg-red-500/15 hover:text-red-200 disabled:opacity-50"
+                      >
+                        {o.label} {mine.toLocaleString()}칩
+                        <span aria-hidden>✕</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
                 </>
@@ -499,8 +563,33 @@ export default function CategoryCard({
               </p>
             </div>
           )}
+
+          {/* 카테고리 삭제 (정산 전만) */}
+          {!isResolved && (
+            <div className="mt-4 border-t border-pitch-700/30 pt-2 text-right">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                disabled={deleting}
+                className="text-[11px] text-pitch-50/40 hover:text-red-400 disabled:opacity-50"
+              >
+                이 카테고리 삭제
+              </button>
+            </div>
+          )}
         </div>
       )}
+
+      <ConfirmModal
+        open={confirmDelete}
+        title="카테고리 삭제"
+        message={`'${category.name}'을(를) 삭제할까요?\n건 칩은 모두 환불되고 이 게임이 사라져요. (전체 적용)`}
+        confirmText="삭제하기"
+        danger
+        busy={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
 
       <ConfirmModal
         open={confirmLock}

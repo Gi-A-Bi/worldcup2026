@@ -116,6 +116,25 @@ export async function removeOption(optionId: string) {
   if (error) throw error;
 }
 
+/** 카테고리 삭제 (건 칩 전액 환불 후 삭제). 정산된 카테고리는 삭제 불가. */
+export async function deleteCategory(categoryId: string, playerId: string) {
+  const { error } = await supabase.rpc("delete_category", {
+    p_category_id: categoryId,
+    p_player_id: playerId,
+  });
+  if (error) {
+    if (error.message.includes("ALREADY_RESOLVED")) {
+      throw new Error("정산된 카테고리는 삭제할 수 없어요.");
+    }
+    if (error.message.includes("delete_category")) {
+      throw new Error(
+        "삭제 함수가 아직 없어요. supabase/cancel_and_delete.sql 을 실행해주세요."
+      );
+    }
+    throw error;
+  }
+}
+
 /** 카테고리 마감 (열림 → 마감). 되돌릴 수 없는 동작이라 호출부에서 확인 모달 사용. */
 export async function lockCategory(
   category: { id: string; name: string },
