@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   CATEGORY_TEMPLATES,
+  TOPSCORER_CANDIDATES,
   createCategory,
   settlementLabel,
   type CategoryTemplate,
@@ -89,8 +90,11 @@ export default function AddCategoryPanel({
           { label: `${teamOptionLabel(away)} 승`, team_id: away.id },
         ];
         kickoffAt = kickoff ? new Date(kickoff).toISOString() : null;
+      } else if (tpl.type === "topscorer") {
+        // 득점왕: 유력 후보 10명 기본 제공 (카드에서 추가/삭제 가능)
+        options = TOPSCORER_CANDIDATES.map((label) => ({ label }));
       }
-      // manual: 옵션 없음 (생성 후 카드에서 직접 추가)
+      // 그 외 manual: 옵션 없음 (생성 후 카드에서 직접 추가)
 
       setBusy(true);
       await createCategory({
@@ -202,7 +206,9 @@ export default function AddCategoryPanel({
 
           {tpl.optionStrategy === "manual" && (
             <p className="rounded-lg bg-pitch-600/10 px-3 py-2 text-xs text-pitch-50/60">
-              만든 뒤 카드에서 옵션(선수명 등)을 직접 추가하세요.
+              {tpl.type === "topscorer"
+                ? "유력 후보 10명이 기본으로 들어가요. 만든 뒤 카드에서 더 추가/삭제할 수 있어요."
+                : "만든 뒤 카드에서 옵션(선수명 등)을 직접 추가하세요."}
             </p>
           )}
 

@@ -169,6 +169,20 @@ export type CategoryTemplate = {
   description: string;
 };
 
+/** 득점왕 기본 후보 (생성 시 자동 옵션, 카드에서 추가/삭제 가능) */
+export const TOPSCORER_CANDIDATES: string[] = [
+  "음바페 (프랑스)",
+  "홀란 (노르웨이)",
+  "해리 케인 (잉글랜드)",
+  "비니시우스 (브라질)",
+  "메시 (아르헨티나)",
+  "라우타로 (아르헨티나)",
+  "호날두 (포르투갈)",
+  "루카쿠 (벨기에)",
+  "라민 야말 (스페인)",
+  "손흥민 (대한민국)",
+];
+
 export const CATEGORY_TEMPLATES: CategoryTemplate[] = [
   {
     key: "winner",
@@ -198,7 +212,7 @@ export const CATEGORY_TEMPLATES: CategoryTemplate[] = [
     multiSelect: false,
     optionStrategy: "manual",
     settleWhen: "대회 종료 후",
-    description: "득점왕 후보 선수를 옵션으로 직접 추가해요.",
+    description: "유력 후보 10명이 기본 제공돼요. 카드에서 더 추가/삭제할 수 있어요.",
   },
   {
     key: "match",
