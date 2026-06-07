@@ -34,7 +34,7 @@ export type CategoryType =
   | "knockout"
   | "custom";
 
-export type SettlementType = "parimutuel" | "pool_share";
+export type SettlementType = "parimutuel" | "pool_share" | "rarity_share";
 
 export type CategoryStatus = "open" | "locked" | "resolved";
 

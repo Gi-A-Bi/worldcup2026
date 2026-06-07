@@ -7,6 +7,8 @@ const BET_ERROR_MESSAGES: Record<string, string> = {
   CATEGORY_NOT_OPEN: "마감된 카테고리에는 베팅할 수 없어요.",
   OPTION_MISMATCH: "옵션이 올바르지 않아요.",
   INSUFFICIENT_CHIPS: "보유 칩이 부족해요.",
+  ALREADY_CONFIRMED: "이미 확정한 베팅이에요. 수정하려면 확정을 해제하세요.",
+  NOT_EDITABLE: "이 카테고리는 수정할 수 없어요.",
 };
 
 /** 원자적 베팅 (RPC place_bet 호출) → 베팅 후 남은 칩 반환 */
@@ -33,6 +35,27 @@ export async function placeBet(input: {
         "베팅 함수(place_bet)가 아직 없어요. supabase/place_bet.sql 을 실행해주세요."
       );
     }
+    throw error;
+  }
+  return data as number;
+}
+
+/** 베팅 취소(수정용 환불). rarity_share 카테고리 + 확정 전에만 가능. */
+export async function removeBet(input: {
+  playerId: string;
+  categoryId: string;
+  optionId: string;
+}): Promise<number> {
+  const { data, error } = await supabase.rpc("remove_bet", {
+    p_player_id: input.playerId,
+    p_category_id: input.categoryId,
+    p_option_id: input.optionId,
+  });
+  if (error) {
+    const code = Object.keys(BET_ERROR_MESSAGES).find((c) =>
+      error.message.includes(c)
+    );
+    if (code) throw new Error(BET_ERROR_MESSAGES[code]);
     throw error;
   }
   return data as number;

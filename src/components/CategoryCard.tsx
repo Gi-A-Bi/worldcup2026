@@ -18,6 +18,7 @@ import type {
 } from "@/lib/types";
 import ConfirmModal from "@/components/ConfirmModal";
 import OptionSelector from "@/components/OptionSelector";
+import RarityAdvanceBet from "@/components/RarityAdvanceBet";
 import ResultEntry from "@/components/ResultEntry";
 import TeamMultiPicker from "@/components/TeamMultiPicker";
 
@@ -92,6 +93,7 @@ export default function CategoryCard({
   const isLocked = category.status === "locked";
   const isResolved = category.status === "resolved";
   const isParimutuel = category.settlement_type === "parimutuel";
+  const isRarity = category.settlement_type === "rarity_share";
   const isMulti = category.multi_select;
   const options = useMemo(() => category.options ?? [], [category.options]);
   const usedTeamIds = options
@@ -230,6 +232,21 @@ export default function CategoryCard({
           {/* ===== 열림: 베팅 ===== */}
           {isOpen && (
             <>
+              {isRarity && (
+                <RarityAdvanceBet
+                  category={category}
+                  teams={teams}
+                  player={player}
+                  bets={bets}
+                  iConfirmed={iConfirmed}
+                  confirmedCount={confirmedCount}
+                  onToggleConfirm={onToggleConfirm}
+                  onBet={onBet}
+                />
+              )}
+
+              {!isRarity && (
+                <>
               {/* 개인 확정 상태 */}
               <div className="mb-3 flex items-center justify-between gap-2">
                 <span className="text-[11px] text-pitch-50/50">
@@ -340,6 +357,8 @@ export default function CategoryCard({
                     베팅은 취소할 수 없어요. 마감 전까지 추가 베팅 가능.
                   </p>
                 </div>
+              )}
+                </>
               )}
 
               {/* 옵션 관리 */}

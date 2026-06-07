@@ -165,11 +165,11 @@ export const CATEGORY_TEMPLATES: CategoryTemplate[] = [
     key: "advance",
     name: "조별리그 진출팀",
     type: "advance",
-    settlementType: "pool_share",
+    settlementType: "rarity_share",
     multiSelect: true,
     optionStrategy: "all-teams",
     settleWhen: "조별리그 종료 후",
-    description: "Round of 32에 오를 32팀을 복수로 골라 베팅해요.",
+    description: "진출할 32팀을 골라요. 남이 안 고른 진출팀일수록 더 큰 이익(희소성 보너스).",
   },
   {
     key: "topscorer",
@@ -204,7 +204,9 @@ export const CATEGORY_TEMPLATES: CategoryTemplate[] = [
 ];
 
 export function settlementLabel(type: SettlementType): string {
-  return type === "parimutuel" ? "파리뮤추얼" : "풀셰어";
+  if (type === "parimutuel") return "파리뮤추얼";
+  if (type === "rarity_share") return "희소성 분배";
+  return "풀셰어";
 }
 
 export function statusLabel(status: string): { text: string; cls: string } {
