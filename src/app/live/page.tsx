@@ -7,13 +7,16 @@ import { supabase } from "@/lib/supabase";
 import type { BetWithNames, CategoryWithOptions } from "@/lib/types";
 import { useSession } from "@/components/SessionProvider";
 
+const TOP_OPTIONS = 6;
+
 export default function LivePage() {
-  const { room } = useSession();
+  const { room, player } = useSession();
   const roomId = room?.id;
 
   const [categories, setCategories] = useState<CategoryWithOptions[]>([]);
   const [bets, setBets] = useState<BetWithNames[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detail, setDetail] = useState<Set<string>>(new Set());
 
   const refresh = useCallback(() => {
     if (!roomId) return;
@@ -62,6 +65,15 @@ export default function LivePage() {
     return map;
   }, [bets]);
 
+  function toggleDetail(id: string) {
+    setDetail((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   if (!room) return null;
 
   return (
@@ -70,7 +82,7 @@ export default function LivePage() {
         <div>
           <h1 className="text-lg font-bold text-pitch-50">🔴 라이브 현황</h1>
           <p className="text-sm text-pitch-50/60">
-            모든 참여자의 베팅이 실시간으로 갱신돼요.
+            누가 어디에 얼마 걸었는지 실시간으로 한눈에.
           </p>
         </div>
         <span className="flex items-center gap-1.5 rounded-full border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-[11px] font-semibold text-red-300">
@@ -92,6 +104,36 @@ export default function LivePage() {
             const agg = aggregateBets(catBets);
             const badge = statusLabel(c.status);
             const isParimutuel = c.settlement_type === "parimutuel";
+
+            // 참여자별 요약
+            const byPlayer = new Map<
+              string,
+              { nickname: string; total: number; picks: { label: string; amount: number }[] }
+            >();
+            for (const b of catBets) {
+              const cur =
+                byPlayer.get(b.player_id) ?? {
+                  nickname: b.players?.nickname ?? "??",
+                  total: 0,
+                  picks: [],
+                };
+              cur.total += b.amount;
+              cur.picks.push({ label: b.options?.label ?? "??", amount: b.amount });
+              byPlayer.set(b.player_id, cur);
+            }
+            const playerRows = [...byPlayer.entries()].sort(
+              (a, b) => b[1].total - a[1].total
+            );
+
+            // 옵션 분포 (상위 N개)
+            const distrib = c.options
+              .map((o) => ({ o, pool: agg.byOption.get(o.id) ?? 0 }))
+              .filter((x) => x.pool > 0)
+              .sort((a, b) => b.pool - a.pool);
+            const top = distrib.slice(0, TOP_OPTIONS);
+            const moreCount = distrib.length - top.length;
+            const showDetail = detail.has(c.id);
+
             return (
               <section
                 key={c.id}
@@ -108,26 +150,20 @@ export default function LivePage() {
                       {badge.text}
                     </span>
                     <span className="font-mono text-[11px] text-pitch-50/50">
-                      풀 {agg.total.toLocaleString()}칩
+                      {byPlayer.size}명 · {agg.total.toLocaleString()}칩
                     </span>
                   </div>
                 </div>
 
-                {/* 옵션 분포 */}
                 {agg.total === 0 ? (
                   <p className="mt-3 text-xs text-pitch-50/40">
                     아직 베팅이 없어요.
                   </p>
                 ) : (
-                  <ul className="mt-3 space-y-1.5">
-                    {c.options
-                      .map((o) => ({
-                        o,
-                        pool: agg.byOption.get(o.id) ?? 0,
-                      }))
-                      .filter((x) => x.pool > 0)
-                      .sort((a, b) => b.pool - a.pool)
-                      .map(({ o, pool }) => {
+                  <>
+                    {/* 인기 옵션 (상위) */}
+                    <ul className="mt-3 space-y-1.5">
+                      {top.map(({ o, pool }) => {
                         const pct = (pool / agg.total) * 100;
                         const odds = pool > 0 ? agg.total / pool : 0;
                         return (
@@ -158,27 +194,84 @@ export default function LivePage() {
                           </li>
                         );
                       })}
-                  </ul>
-                )}
+                    </ul>
+                    {moreCount > 0 && (
+                      <p className="mt-1.5 text-center text-[11px] text-pitch-50/40">
+                        + {moreCount}개 옵션 더
+                      </p>
+                    )}
 
-                {/* 베팅 내역 (공개) */}
-                {catBets.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {catBets.map((b) => (
-                      <span
-                        key={b.id}
-                        className="rounded-full border border-pitch-700/40 bg-[#04130c] px-2.5 py-1 text-[11px] text-pitch-50/70"
-                      >
-                        <span className="text-pitch-50">
-                          {b.players?.nickname ?? "??"}
-                        </span>{" "}
-                        → {b.options?.label ?? "??"}{" "}
-                        <span className="font-mono text-gold-300">
-                          {b.amount.toLocaleString()}
-                        </span>
-                      </span>
-                    ))}
-                  </div>
+                    {/* 참여자별 요약 */}
+                    <div className="mt-3">
+                      <p className="mb-1.5 text-[11px] text-pitch-50/50">
+                        참여자별
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {playerRows.map(([pid, r]) => {
+                          const isMe = pid === player?.id;
+                          return (
+                            <span
+                              key={pid}
+                              className={[
+                                "rounded-full border px-2.5 py-1 text-[11px]",
+                                isMe
+                                  ? "border-gold-500/40 bg-gold-500/10 text-gold-200"
+                                  : "border-pitch-700/40 bg-[#04130c] text-pitch-50/80",
+                              ].join(" ")}
+                            >
+                              {r.nickname}{" "}
+                              <span className="font-mono text-gold-300">
+                                {r.total.toLocaleString()}
+                              </span>
+                              {r.picks.length > 1 && (
+                                <span className="text-pitch-50/40">
+                                  {" "}
+                                  ·{r.picks.length}건
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 상세 보기 토글 */}
+                    <button
+                      type="button"
+                      onClick={() => toggleDetail(c.id)}
+                      className="mt-2 text-[11px] text-pitch-400 hover:text-gold-300"
+                    >
+                      {showDetail ? "상세 닫기 ▲" : "상세 보기 ▼"}
+                    </button>
+
+                    {showDetail && (
+                      <div className="mt-2 space-y-2 rounded-xl border border-pitch-700/40 bg-[#04130c] p-3">
+                        {playerRows.map(([pid, r]) => (
+                          <div key={pid}>
+                            <p className="text-xs font-semibold text-pitch-50">
+                              {r.nickname}{" "}
+                              <span className="font-mono text-gold-300">
+                                {r.total.toLocaleString()}칩
+                              </span>
+                            </p>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {r.picks.map((p, i) => (
+                                <span
+                                  key={i}
+                                  className="rounded border border-pitch-700/40 px-1.5 py-0.5 text-[10px] text-pitch-50/60"
+                                >
+                                  {p.label}{" "}
+                                  <span className="font-mono text-gold-300/80">
+                                    {p.amount.toLocaleString()}
+                                  </span>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </section>
             );
