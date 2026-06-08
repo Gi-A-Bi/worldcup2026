@@ -3,11 +3,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchCategories, statusLabel } from "@/lib/categories";
 import { aggregateBets, fetchBetsForCategories } from "@/lib/bets";
+import { fetchTeams } from "@/lib/rooms";
 import { supabase } from "@/lib/supabase";
-import type { BetWithNames, CategoryWithOptions } from "@/lib/types";
+import { WORLD_CUP_GROUPS } from "@/lib/worldcupTeams";
+import type {
+  BetWithNames,
+  CategoryWithOptions,
+  Option,
+  Team,
+} from "@/lib/types";
 import { useSession } from "@/components/SessionProvider";
+import Flag from "@/components/Flag";
 
 const TOP_OPTIONS = 6;
+
+type Picker = { nickname: string; isMe: boolean };
 
 export default function LivePage() {
   const { room, player } = useSession();
@@ -15,6 +25,7 @@ export default function LivePage() {
 
   const [categories, setCategories] = useState<CategoryWithOptions[]>([]);
   const [bets, setBets] = useState<BetWithNames[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<Set<string>>(new Set());
 
@@ -27,6 +38,13 @@ export default function LivePage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!roomId) return;
+    fetchTeams(roomId)
+      .then(setTeams)
+      .catch(() => {});
   }, [roomId]);
 
   useEffect(() => {
@@ -64,6 +82,12 @@ export default function LivePage() {
     }
     return map;
   }, [bets]);
+
+  const teamById = useMemo(() => {
+    const m = new Map<string, Team>();
+    for (const t of teams) m.set(t.id, t);
+    return m;
+  }, [teams]);
 
   function toggleDetail(id: string) {
     setDetail((prev) => {
@@ -104,11 +128,16 @@ export default function LivePage() {
             const agg = aggregateBets(catBets);
             const badge = statusLabel(c.status);
             const isParimutuel = c.settlement_type === "parimutuel";
+            const isAdvance = c.type === "advance";
 
             // 참여자별 요약
             const byPlayer = new Map<
               string,
-              { nickname: string; total: number; picks: { label: string; amount: number }[] }
+              {
+                nickname: string;
+                total: number;
+                picks: { label: string; amount: number }[];
+              }
             >();
             for (const b of catBets) {
               const cur =
@@ -118,14 +147,27 @@ export default function LivePage() {
                   picks: [],
                 };
               cur.total += b.amount;
-              cur.picks.push({ label: b.options?.label ?? "??", amount: b.amount });
+              cur.picks.push({
+                label: b.options?.label ?? "??",
+                amount: b.amount,
+              });
               byPlayer.set(b.player_id, cur);
             }
             const playerRows = [...byPlayer.entries()].sort(
               (a, b) => b[1].total - a[1].total
             );
 
-            // 옵션 분포 (상위 N개)
+            // 옵션별 누가 골랐는지 (조별 뷰용)
+            const pickersByOption = new Map<string, Picker[]>();
+            for (const b of catBets) {
+              const arr = pickersByOption.get(b.option_id) ?? [];
+              arr.push({
+                nickname: b.players?.nickname ?? "??",
+                isMe: b.player_id === player?.id,
+              });
+              pickersByOption.set(b.option_id, arr);
+            }
+
             const distrib = c.options
               .map((o) => ({ o, pool: agg.byOption.get(o.id) ?? 0 }))
               .filter((x) => x.pool > 0)
@@ -159,6 +201,13 @@ export default function LivePage() {
                   <p className="mt-3 text-xs text-pitch-50/40">
                     아직 베팅이 없어요.
                   </p>
+                ) : isAdvance ? (
+                  /* 진출팀: 조별로 누가 골랐는지 */
+                  <GroupedPickers
+                    options={c.options}
+                    teamById={teamById}
+                    pickersByOption={pickersByOption}
+                  />
                 ) : (
                   <>
                     {/* 인기 옵션 (상위) */}
@@ -277,6 +326,75 @@ export default function LivePage() {
             );
           })}
         </div>
+      )}
+    </div>
+  );
+}
+
+/** 진출팀: 12개 조로 묶어 각 국가를 누가 골랐는지 표시 */
+function GroupedPickers({
+  options,
+  teamById,
+  pickersByOption,
+}: {
+  options: Option[];
+  teamById: Map<string, Team>;
+  pickersByOption: Map<string, Picker[]>;
+}) {
+  const byGroup = new Map<string, { o: Option; t: Team | undefined }[]>();
+  for (const g of WORLD_CUP_GROUPS) byGroup.set(g, []);
+  for (const o of options) {
+    const t = o.team_id ? teamById.get(o.team_id) : undefined;
+    const g = t?.group_label ?? "기타";
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g)!.push({ o, t });
+  }
+
+  return (
+    <div className="mt-3 space-y-3">
+      {[...byGroup.entries()].map(([g, items]) =>
+        items.length === 0 ? null : (
+          <div key={g}>
+            <p className="mb-1 text-[10px] font-semibold text-pitch-400">
+              {g}조
+            </p>
+            <ul className="space-y-1">
+              {items.map(({ o, t }) => {
+                const pickers = pickersByOption.get(o.id) ?? [];
+                return (
+                  <li
+                    key={o.id}
+                    className="flex items-start justify-between gap-2 rounded-lg border border-pitch-700/40 bg-[#06180f] px-2.5 py-1.5"
+                  >
+                    <span className="flex shrink-0 items-center gap-1.5 text-sm text-pitch-50">
+                      <Flag emoji={t?.flag_emoji} code={t?.fifa_code} />
+                      {t?.name ?? o.label}
+                    </span>
+                    <span className="flex flex-wrap justify-end gap-1">
+                      {pickers.length === 0 ? (
+                        <span className="text-[11px] text-pitch-50/25">—</span>
+                      ) : (
+                        pickers.map((p, i) => (
+                          <span
+                            key={i}
+                            className={[
+                              "rounded-full px-1.5 py-0.5 text-[10px]",
+                              p.isMe
+                                ? "bg-gold-500/20 text-gold-200"
+                                : "bg-white/5 text-pitch-50/70",
+                            ].join(" ")}
+                          >
+                            {p.nickname}
+                          </span>
+                        ))
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )
       )}
     </div>
   );
