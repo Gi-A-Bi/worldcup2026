@@ -21,6 +21,8 @@ import ConfirmModal from "@/components/ConfirmModal";
 import OptionSelector from "@/components/OptionSelector";
 import RarityAdvanceBet from "@/components/RarityAdvanceBet";
 import ResultEntry from "@/components/ResultEntry";
+import ScoreGridBet from "@/components/ScoreGridBet";
+import ScoreResultEntry from "@/components/ScoreResultEntry";
 import TeamMultiPicker from "@/components/TeamMultiPicker";
 
 const SETTLE_WHEN: Record<string, string> = {
@@ -98,6 +100,7 @@ export default function CategoryCard({
   const isResolved = category.status === "resolved";
   const isParimutuel = category.settlement_type === "parimutuel";
   const isRarity = category.settlement_type === "rarity_share";
+  const isScore = category.settlement_type === "score_cascade";
   const isMulti = category.multi_select;
   const options = useMemo(() => category.options ?? [], [category.options]);
   const usedTeamIds = options
@@ -273,6 +276,18 @@ export default function CategoryCard({
           {/* ===== 열림: 베팅 ===== */}
           {isOpen && (
             <>
+              {isScore && (
+                <ScoreGridBet
+                  category={category}
+                  player={player}
+                  bets={bets}
+                  iConfirmed={iConfirmed}
+                  confirmedCount={confirmedCount}
+                  onToggleConfirm={onToggleConfirm}
+                  onBet={onBet}
+                />
+              )}
+
               {isRarity && (
                 <RarityAdvanceBet
                   category={category}
@@ -286,7 +301,7 @@ export default function CategoryCard({
                 />
               )}
 
-              {!isRarity && (
+              {!isRarity && !isScore && (
                 <>
               {/* 개인 확정 상태 */}
               <div className="mb-3 flex items-center justify-between gap-2">
@@ -425,15 +440,17 @@ export default function CategoryCard({
                 </>
               )}
 
-              {/* 옵션 관리 */}
+              {/* 옵션 관리 / 마감 */}
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setManaging((v) => !v)}
-                  className="rounded-lg border border-pitch-700/50 px-3 py-1.5 text-xs font-medium text-pitch-50/70 hover:text-pitch-50"
-                >
-                  {managing ? "옵션 관리 닫기" : "옵션 관리"}
-                </button>
+                {!isScore && !isRarity && (
+                  <button
+                    type="button"
+                    onClick={() => setManaging((v) => !v)}
+                    className="rounded-lg border border-pitch-700/50 px-3 py-1.5 text-xs font-medium text-pitch-50/70 hover:text-pitch-50"
+                  >
+                    {managing ? "옵션 관리 닫기" : "옵션 관리"}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setConfirmLock(true)}
@@ -525,19 +542,29 @@ export default function CategoryCard({
           )}
 
           {/* ===== 마감: 결과 입력 → 자동 정산 ===== */}
-          {isLocked && (
-            <ResultEntry
-              category={category}
-              teams={teams}
-              player={player}
-              bets={bets}
-              defaultOpen
-              onResolved={() => {
-                onChanged();
-                onBet();
-              }}
-            />
-          )}
+          {isLocked &&
+            (isScore ? (
+              <ScoreResultEntry
+                category={category}
+                player={player}
+                onResolved={() => {
+                  onChanged();
+                  onBet();
+                }}
+              />
+            ) : (
+              <ResultEntry
+                category={category}
+                teams={teams}
+                player={player}
+                bets={bets}
+                defaultOpen
+                onResolved={() => {
+                  onChanged();
+                  onBet();
+                }}
+              />
+            ))}
 
           {/* ===== 정산됨: 결과 요약 ===== */}
           {isResolved && (
