@@ -1,17 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { aggregateBets, placeBet, removeBet } from "@/lib/bets";
-import { SCORE_MAX } from "@/lib/scores";
-import type { BetWithNames, CategoryWithOptions, Option, Player } from "@/lib/types";
+import { useMemo, useRef, useState } from "react";
+import { placeBet, removeBet } from "@/lib/bets";
+import { KOREA_NAME } from "@/lib/scores";
+import type { BetWithNames, CategoryWithOptions, Option, Player, Team } from "@/lib/types";
+import Flag from "@/components/Flag";
+
+const GOAL_CHOICES = [0, 1, 2, 3, 4, 5, 6]; // 6 = 6골 이상
+
+type Row = { key: number; home: number; away: number; amount: number };
 
 /**
- * 스코어 맞추기 베팅 UI.
- * 0~5 격자(한국 골 × 상대 골) + '6골 이상' 버킷. 자유 금액, 여러 스코어 베팅 가능.
- * 확정 전까지 추가/취소(환불) 자유.
+ * 스코어 맞추기 베팅 UI (콤보박스 폼).
+ * 한국 골 / 상대 골을 골라(0~5, 6+) 가운데 승무패가 자동 표시, 오른쪽에 금액.
+ * '스코어 추가'로 여러 줄 베팅. 확정 전 취소(환불) 자유.
  */
 export default function ScoreGridBet({
   category,
+  teams,
   player,
   bets,
   iConfirmed,
@@ -20,6 +26,7 @@ export default function ScoreGridBet({
   onBet,
 }: {
   category: CategoryWithOptions;
+  teams: Team[];
   player: Player;
   bets: BetWithNames[];
   iConfirmed: boolean;
@@ -28,9 +35,15 @@ export default function ScoreGridBet({
   onBet: () => void;
 }) {
   const options = useMemo(() => category.options ?? [], [category.options]);
-  const agg = useMemo(() => aggregateBets(bets), [bets]);
 
-  const cell = useMemo(() => {
+  // 상대팀(카테고리 이름 "🇰🇷 한국 vs 멕시코"에서 추출)
+  const opponent = useMemo(() => {
+    const nm = category.name.split("vs").pop()?.trim() ?? "";
+    return teams.find((t) => t.name === nm);
+  }, [category.name, teams]);
+  const korea = useMemo(() => teams.find((t) => t.name === KOREA_NAME), [teams]);
+
+  const lookup = useMemo(() => {
     const m = new Map<string, Option>();
     let bucket: Option | undefined;
     for (const o of options) {
@@ -41,6 +54,11 @@ export default function ScoreGridBet({
     return { m, bucket };
   }, [options]);
 
+  function optionFor(home: number, away: number): Option | undefined {
+    if (home >= 6 || away >= 6) return lookup.bucket;
+    return lookup.m.get(`${home}_${away}`);
+  }
+
   const myByOption = useMemo(() => {
     const m = new Map<string, number>();
     for (const b of bets)
@@ -49,45 +67,58 @@ export default function ScoreGridBet({
     return m;
   }, [bets, player.id]);
 
-  const [picks, setPicks] = useState<Set<string>>(new Set());
-  const [amount, setAmount] = useState(1000);
+  const [rows, setRows] = useState<Row[]>([
+    { key: 1, home: 1, away: 0, amount: 1000 },
+  ]);
+  const nextKey = useRef(2);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const rows = SCORE_MAX + 1;
-  const perOption = Math.floor(amount || 0);
-  const totalNeeded = perOption * picks.size;
+  const totalNeeded = rows.reduce((s, r) => s + Math.max(0, Math.floor(r.amount || 0)), 0);
 
-  function toggle(optId: string | undefined) {
-    if (!optId || iConfirmed) return;
+  function setRow(key: number, patch: Partial<Row>) {
     setError(null);
-    setPicks((prev) => {
-      const n = new Set(prev);
-      if (n.has(optId)) n.delete(optId);
-      else n.add(optId);
-      return n;
-    });
+    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  }
+  function addRow() {
+    setRows((rs) => [...rs, { key: nextKey.current++, home: 0, away: 0, amount: 1000 }]);
+  }
+  function removeRow(key: number) {
+    setRows((rs) => (rs.length > 1 ? rs.filter((r) => r.key !== key) : rs));
+  }
+
+  function resultOf(home: number, away: number) {
+    if (home >= 6 || away >= 6)
+      return { text: "난타전", cls: "bg-amber-500/15 text-amber-300" };
+    if (home > away) return { text: "한국 승", cls: "bg-emerald-500/15 text-emerald-300" };
+    if (home === away) return { text: "무승부", cls: "bg-white/10 text-pitch-50/70" };
+    return { text: "한국 패", cls: "bg-red-500/15 text-red-300" };
   }
 
   async function handleBet() {
-    if (picks.size === 0) {
-      setError("스코어를 한 칸 이상 고르세요.");
-      return;
-    }
-    if (perOption <= 0) {
-      setError("베팅 칩은 1 이상이어야 해요.");
+    const valid = rows.filter((r) => Math.floor(r.amount || 0) > 0);
+    if (valid.length === 0) {
+      setError("베팅 금액을 입력하세요.");
       return;
     }
     if (totalNeeded > player.chips) {
       setError(`총 ${totalNeeded.toLocaleString()}칩 필요 · 보유 ${player.chips.toLocaleString()}칩`);
       return;
     }
+    for (const r of valid) {
+      if (!optionFor(r.home, r.away)) {
+        setError("스코어 옵션을 찾을 수 없어요.");
+        return;
+      }
+    }
     setBusy(true);
     setError(null);
     try {
-      for (const id of picks)
-        await placeBet({ playerId: player.id, categoryId: category.id, optionId: id, amount: perOption });
-      setPicks(new Set());
+      for (const r of valid) {
+        const o = optionFor(r.home, r.away)!;
+        await placeBet({ playerId: player.id, categoryId: category.id, optionId: o.id, amount: Math.floor(r.amount) });
+      }
+      setRows([{ key: nextKey.current++, home: 1, away: 0, amount: 1000 }]);
       onBet();
     } catch (e) {
       setError(e instanceof Error ? e.message : "베팅에 실패했어요.");
@@ -111,27 +142,30 @@ export default function ScoreGridBet({
     }
   }
 
-  function cellClass(o: Option | undefined) {
-    if (!o) return "bg-[#04130c] text-pitch-50/20";
-    const sel = picks.has(o.id);
-    const mine = (myByOption.get(o.id) ?? 0) > 0;
-    if (sel) return "bg-gold-500/25 ring-1 ring-gold-400 text-pitch-50";
-    if (mine) return "bg-emerald-500/20 text-emerald-200";
-    const pool = agg.byOption.get(o.id) ?? 0;
-    if (pool > 0) return "bg-pitch-600/20 text-pitch-50/90";
-    return "bg-[#06180f] text-pitch-50/60";
-  }
-
-  const myBetOptions = options
+  // 내 베팅 (취소용) — 라벨 정리
+  const myBets = options
     .map((o) => ({ o, mine: myByOption.get(o.id) ?? 0 }))
     .filter((x) => x.mine > 0);
 
+  const selectCls =
+    "rounded-lg border border-pitch-700/50 bg-[#06180f] px-2 py-1.5 text-sm font-mono text-pitch-50 outline-none focus:border-gold-500/60";
+
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between text-[11px]">
-        <span className="text-pitch-50/60">
-          내 선택 {picks.size}칸 · 확정 {confirmedCount}명
+      {/* 대진 (두 나라 국기) */}
+      <div className="mb-3 flex items-center justify-center gap-3 rounded-xl border border-pitch-700/40 bg-[#06180f] py-2">
+        <span className="flex items-center gap-1.5 text-sm font-bold text-pitch-50">
+          <Flag emoji={korea?.flag_emoji ?? "🇰🇷"} code="KOR" /> 한국
         </span>
+        <span className="text-xs text-pitch-50/40">VS</span>
+        <span className="flex items-center gap-1.5 text-sm font-bold text-pitch-50">
+          <Flag emoji={opponent?.flag_emoji} code={opponent?.fifa_code} />
+          {opponent?.name ?? "상대"}
+        </span>
+      </div>
+
+      <div className="mb-2 flex items-center justify-between text-[11px]">
+        <span className="text-pitch-50/60">확정 {confirmedCount}명</span>
         <span className="text-pitch-50/50">보유 {player.chips.toLocaleString()}칩</span>
       </div>
 
@@ -141,94 +175,81 @@ export default function ScoreGridBet({
         </p>
       )}
 
-      <p className="mb-2 text-[11px] text-pitch-50/50">
-        ← 상대 골 →, ↓ 한국 골. 칸을 눌러 스코어를 고르고 베팅. (예: 한국 2 : 1 상대)
-      </p>
+      {!iConfirmed && (
+        <>
+          {/* 스코어 입력 줄들 */}
+          <div className="space-y-2">
+            {rows.map((r) => {
+              const res = resultOf(r.home, r.away);
+              return (
+                <div
+                  key={r.key}
+                  className="flex flex-wrap items-center gap-2 rounded-xl border border-pitch-700/40 bg-[#04130c] p-2"
+                >
+                  <Flag emoji={korea?.flag_emoji ?? "🇰🇷"} code="KOR" />
+                  <select
+                    value={r.home}
+                    onChange={(e) => setRow(r.key, { home: Number(e.target.value) })}
+                    className={selectCls}
+                    aria-label="한국 골"
+                  >
+                    {GOAL_CHOICES.map((g) => (
+                      <option key={g} value={g}>{g === 6 ? "6+" : g}</option>
+                    ))}
+                  </select>
 
-      {/* 격자 */}
-      <div className="overflow-x-auto">
-        <table className="w-full border-separate border-spacing-1 text-center">
-          <thead>
-            <tr>
-              <th className="text-[10px] text-pitch-50/40">한\상</th>
-              {Array.from({ length: rows }, (_, a) => (
-                <th key={a} className="text-[10px] font-mono text-pitch-400">{a}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: rows }, (_, h) => (
-              <tr key={h}>
-                <th className="text-[10px] font-mono text-pitch-400">{h}</th>
-                {Array.from({ length: rows }, (_, a) => {
-                  const o = cell.m.get(`${h}_${a}`);
-                  const pool = o ? agg.byOption.get(o.id) ?? 0 : 0;
-                  const mine = o ? myByOption.get(o.id) ?? 0 : 0;
-                  return (
-                    <td key={a} className="p-0">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${res.cls}`}>
+                    {res.text}
+                  </span>
+
+                  <select
+                    value={r.away}
+                    onChange={(e) => setRow(r.key, { away: Number(e.target.value) })}
+                    className={selectCls}
+                    aria-label="상대 골"
+                  >
+                    {GOAL_CHOICES.map((g) => (
+                      <option key={g} value={g}>{g === 6 ? "6+" : g}</option>
+                    ))}
+                  </select>
+                  <Flag emoji={opponent?.flag_emoji} code={opponent?.fifa_code} />
+
+                  <span className="ml-auto flex items-center gap-1">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={Number.isFinite(r.amount) ? r.amount : 0}
+                      onChange={(e) => setRow(r.key, { amount: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+                      className="w-20 rounded-lg border border-pitch-700/50 bg-[#06180f] px-2 py-1.5 text-right font-mono text-sm text-gold-300 outline-none focus:border-gold-500/60 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                      aria-label="베팅 칩"
+                    />
+                    <span className="text-[10px] text-pitch-50/40">칩</span>
+                    {rows.length > 1 && (
                       <button
                         type="button"
-                        disabled={iConfirmed || busy}
-                        onClick={() => toggle(o?.id)}
-                        aria-label={`한국 ${h} 상대 ${a}`}
-                        className={`flex h-9 w-full flex-col items-center justify-center rounded text-[10px] leading-none transition-colors disabled:opacity-70 ${cellClass(o)}`}
+                        onClick={() => removeRow(r.key)}
+                        className="ml-0.5 text-pitch-50/40 hover:text-red-400"
+                        aria-label="이 줄 삭제"
                       >
-                        <span className="font-mono">{h}:{a}</span>
-                        {mine > 0 ? (
-                          <span className="text-[8px] text-gold-300">내{mine.toLocaleString()}</span>
-                        ) : pool > 0 ? (
-                          <span className="text-[8px] text-pitch-50/40">{pool.toLocaleString()}</span>
-                        ) : null}
+                        ✕
                       </button>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 6골 이상 버킷 */}
-      {cell.bucket && (
-        <button
-          type="button"
-          disabled={iConfirmed || busy}
-          onClick={() => toggle(cell.bucket?.id)}
-          className={`mt-1 w-full rounded-lg py-2 text-xs font-medium transition-colors disabled:opacity-70 ${cellClass(cell.bucket)}`}
-        >
-          6골 이상 (난타전)
-          {(() => {
-            const pool = agg.byOption.get(cell.bucket!.id) ?? 0;
-            const mine = myByOption.get(cell.bucket!.id) ?? 0;
-            return mine > 0 ? (
-              <span className="ml-1 text-gold-300">· 내 {mine.toLocaleString()}</span>
-            ) : pool > 0 ? (
-              <span className="ml-1 text-pitch-50/40">· {pool.toLocaleString()}칩</span>
-            ) : null;
-          })()}
-        </button>
-      )}
-
-      {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
-
-      {/* 베팅 바 */}
-      {!iConfirmed && picks.size > 0 && (
-        <div className="mt-3 rounded-xl border border-gold-500/30 bg-gold-500/5 p-3">
-          <div className="flex items-center gap-2">
-            <Stepper value={amount} max={player.chips} onChange={setAmount} />
-            <button
-              type="button"
-              onClick={() => setAmount(picks.size > 0 ? Math.floor(player.chips / picks.size) : player.chips)}
-              className="shrink-0 rounded-lg border border-pitch-700/50 px-2.5 py-2 text-xs text-pitch-50/70 hover:text-gold-300"
-            >
-              올인
-            </button>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-          <p className="mt-1.5 text-[11px] text-pitch-50/50">
-            {picks.size}칸 × {perOption.toLocaleString()}칩 = 합계{" "}
-            <span className="font-mono text-gold-300">{totalNeeded.toLocaleString()}칩</span>
-          </p>
+
+          <button
+            type="button"
+            onClick={addRow}
+            className="mt-2 w-full rounded-lg border border-dashed border-pitch-600/50 py-2 text-xs font-semibold text-pitch-300 hover:border-gold-500/40 hover:text-gold-300"
+          >
+            + 스코어 추가
+          </button>
+
+          {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
+
           <button
             type="button"
             onClick={handleBet}
@@ -237,15 +258,18 @@ export default function ScoreGridBet({
           >
             {busy ? "베팅 중…" : `${totalNeeded.toLocaleString()}칩 베팅하기`}
           </button>
-        </div>
+          <p className="mt-1.5 text-center text-[11px] text-pitch-50/40">
+            확정 전까지 추가·취소(환불) 자유. 정확히 맞히면 독식, 못 맞히면 승무패 맞힌 사람끼리.
+          </p>
+        </>
       )}
 
       {/* 내 베팅 취소 */}
-      {!iConfirmed && myBetOptions.length > 0 && (
+      {!iConfirmed && myBets.length > 0 && (
         <div className="mt-3 rounded-xl border border-pitch-700/40 bg-[#04130c] p-3">
           <p className="mb-1.5 text-[11px] text-pitch-50/60">내 베팅 (✕ 취소·환불)</p>
           <div className="flex flex-wrap gap-1.5">
-            {myBetOptions.map(({ o, mine }) => (
+            {myBets.map(({ o, mine }) => (
               <button
                 key={o.id}
                 type="button"
@@ -274,31 +298,6 @@ export default function ScoreGridBet({
           {iConfirmed ? "내 베팅 확정 해제 (수정하기)" : "내 베팅 확정"}
         </button>
       )}
-    </div>
-  );
-}
-
-function Stepper({
-  value,
-  max,
-  onChange,
-}: {
-  value: number;
-  max: number;
-  onChange: (v: number) => void;
-}) {
-  const clamp = (v: number) => Math.max(0, Math.min(max, Math.floor(v || 0)));
-  return (
-    <div className="flex flex-1 items-center rounded-lg border border-pitch-700/50 bg-[#06180f]">
-      <button type="button" onClick={() => onChange(clamp(value - 100))} className="px-3 py-2 text-pitch-50/70 hover:text-gold-300">−</button>
-      <input
-        type="number"
-        inputMode="numeric"
-        value={Number.isFinite(value) ? value : 0}
-        onChange={(e) => onChange(clamp(Number(e.target.value)))}
-        className="w-full min-w-0 bg-transparent text-center font-mono text-sm text-pitch-50 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-      />
-      <button type="button" onClick={() => onChange(clamp(value + 100))} className="px-3 py-2 text-pitch-50/70 hover:text-gold-300">+</button>
     </div>
   );
 }
