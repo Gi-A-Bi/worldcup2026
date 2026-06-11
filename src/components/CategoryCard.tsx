@@ -279,6 +279,7 @@ export default function CategoryCard({
               {isScore && (
                 <ScoreGridBet
                   category={category}
+                  teams={teams}
                   player={player}
                   bets={bets}
                   iConfirmed={iConfirmed}
