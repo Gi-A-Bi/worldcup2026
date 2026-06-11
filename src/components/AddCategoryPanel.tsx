@@ -10,6 +10,7 @@ import {
   type NewOption,
 } from "@/lib/categories";
 import { teamOptionLabel } from "@/lib/flags";
+import { KOREA_NAME, createKoreaMatch, koreaOpponents } from "@/lib/scores";
 import type { Team } from "@/lib/types";
 import TeamMultiPicker from "@/components/TeamMultiPicker";
 
@@ -17,11 +18,13 @@ export default function AddCategoryPanel({
   teams,
   roomId,
   playerId,
+  existingNames = [],
   onCreated,
 }: {
   teams: Team[];
   roomId: string;
   playerId: string;
+  existingNames?: string[];
   onCreated: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -116,6 +119,32 @@ export default function AddCategoryPanel({
     }
   }
 
+  const existing = new Set(existingNames);
+  const opponents = koreaOpponents(teams);
+
+  async function createKorea(opps: Team[], kickoffAt: string | null) {
+    setError(null);
+    const targets = opps.filter(
+      (o) => !existing.has(`🇰🇷 한국 vs ${o.name}`)
+    );
+    if (targets.length === 0) {
+      setError("이미 추가된 경기예요.");
+      return;
+    }
+    setBusy(true);
+    try {
+      for (const opp of targets) {
+        await createKoreaMatch({ roomId, playerId, opponent: opp, kickoffAt });
+      }
+      reset();
+      setOpen(false);
+      onCreated();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "경기 생성에 실패했어요.");
+      setBusy(false);
+    }
+  }
+
   if (!open) {
     return (
       <button
@@ -183,6 +212,84 @@ export default function AddCategoryPanel({
             ← 템플릿 다시 고르기
           </button>
 
+          {tpl.optionStrategy === "korea" && (
+            <div className="space-y-3">
+              <p className="rounded-lg bg-pitch-600/10 px-3 py-2 text-xs leading-relaxed text-pitch-50/70">
+                한국 경기 스코어 맞추기예요. 정확한 스코어를 맞히면 독식, 못
+                맞히면 승무패 맞힌 사람끼리 나눠 가져요.
+              </p>
+
+              <div>
+                <p className="mb-1 text-xs font-medium text-pitch-50/70">
+                  조별리그 (자동)
+                </p>
+                {opponents.length === 0 ? (
+                  <p className="text-xs text-pitch-50/40">
+                    한국 팀 데이터를 찾을 수 없어요.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mb-2 text-[11px] text-pitch-50/50">
+                      상대: {opponents.map((o) => o.name).join(", ")}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => createKorea(opponents, null)}
+                      className="w-full rounded-lg bg-gold-500 py-2.5 text-sm font-bold text-[#1a1205] hover:bg-gold-400 disabled:opacity-50"
+                    >
+                      {busy
+                        ? "만드는 중…"
+                        : `조별 ${opponents.length}경기 한 번에 추가`}
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <div className="border-t border-pitch-700/30 pt-3">
+                <p className="mb-1 text-xs font-medium text-pitch-50/70">
+                  토너먼트 등 직접 추가
+                </p>
+                <TeamSelect
+                  label="상대팀"
+                  teams={teams.filter((t) => t.name !== KOREA_NAME)}
+                  value={awayId}
+                  onChange={setAwayId}
+                />
+                <label className="mt-2 block">
+                  <span className="mb-1 block text-xs font-medium text-pitch-50/70">
+                    킥오프 (KST, 선택)
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={kickoff}
+                    onChange={(e) => setKickoff(e.target.value)}
+                    className="w-full rounded-lg border border-pitch-700/50 bg-[#06180f] px-3 py-2 text-sm text-pitch-50 outline-none focus:border-gold-500/60"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={busy || !awayId}
+                  onClick={() => {
+                    const opp = teams.find((t) => t.id === awayId);
+                    if (opp)
+                      createKorea(
+                        [opp],
+                        kickoff ? new Date(kickoff).toISOString() : null
+                      );
+                  }}
+                  className="mt-2 w-full rounded-lg border border-pitch-600/50 bg-pitch-600/10 py-2.5 text-sm font-semibold text-pitch-200 hover:text-gold-300 disabled:opacity-50"
+                >
+                  이 경기 추가
+                </button>
+              </div>
+
+              {error && <p className="text-xs text-red-300">{error}</p>}
+            </div>
+          )}
+
+          {tpl.optionStrategy !== "korea" && (
+            <>
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-pitch-50/70">
               카테고리 이름
@@ -280,6 +387,8 @@ export default function AddCategoryPanel({
           >
             {busy ? "만드는 중…" : "카테고리 만들기"}
           </button>
+            </>
+          )}
         </div>
       )}
     </div>

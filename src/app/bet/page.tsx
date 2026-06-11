@@ -180,6 +180,7 @@ export default function BetPage() {
         teams={teams}
         roomId={room.id}
         playerId={player.id}
+        existingNames={categories.map((c) => c.name)}
         onCreated={refreshAll}
       />
 

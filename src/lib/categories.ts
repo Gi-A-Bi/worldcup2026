@@ -31,7 +31,12 @@ async function logActivity(
     .insert({ room_id: roomId, player_id: playerId, action, meta });
 }
 
-export type NewOption = { label: string; team_id?: string | null };
+export type NewOption = {
+  label: string;
+  team_id?: string | null;
+  home_goals?: number | null;
+  away_goals?: number | null;
+};
 
 export type CreateCategoryInput = {
   roomId: string;
@@ -70,6 +75,8 @@ export async function createCategory(
       category_id: cat.id,
       label: o.label,
       team_id: o.team_id ?? null,
+      home_goals: o.home_goals ?? null,
+      away_goals: o.away_goals ?? null,
     }));
     const { error: oe } = await supabase.from("options").insert(payload);
     if (oe) throw oe;
@@ -156,7 +163,8 @@ export type OptionStrategy =
   | "all-teams" // 48팀 자동 옵션
   | "match" // 두 팀 선택 → 승/무/패
   | "pick-teams" // 팀 골라서 옵션 (라운드 진출팀)
-  | "manual"; // 직접 입력 (득점왕 등)
+  | "manual" // 직접 입력 (득점왕 등)
+  | "korea"; // 한국 경기 스코어 맞추기 (전용 플로우)
 
 export type CategoryTemplate = {
   key: string;
@@ -215,6 +223,17 @@ export const CATEGORY_TEMPLATES: CategoryTemplate[] = [
     description: "유력 후보 10명이 기본 제공돼요. 카드에서 더 추가/삭제할 수 있어요.",
   },
   {
+    key: "korea",
+    name: "🇰🇷 한국 경기 (스코어)",
+    type: "match",
+    settlementType: "score_cascade",
+    multiSelect: false,
+    optionStrategy: "korea",
+    settleWhen: "매치 종료 즉시",
+    description:
+      "한국 경기 스코어 맞추기. 정확히 맞히면 독식, 못 맞히면 승무패 맞힌 사람끼리. 조별 3경기 자동 추가.",
+  },
+  {
     key: "match",
     name: "빅매치 승무패",
     type: "match",
@@ -239,6 +258,7 @@ export const CATEGORY_TEMPLATES: CategoryTemplate[] = [
 export function settlementLabel(type: SettlementType): string {
   if (type === "parimutuel") return "파리뮤추얼";
   if (type === "rarity_share") return "희소성 분배";
+  if (type === "score_cascade") return "스코어 맞추기";
   return "풀셰어";
 }
 

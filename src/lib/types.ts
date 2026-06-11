@@ -34,7 +34,11 @@ export type CategoryType =
   | "knockout"
   | "custom";
 
-export type SettlementType = "parimutuel" | "pool_share" | "rarity_share";
+export type SettlementType =
+  | "parimutuel"
+  | "pool_share"
+  | "rarity_share"
+  | "score_cascade";
 
 export type CategoryStatus = "open" | "locked" | "resolved";
 
@@ -58,6 +62,8 @@ export type Option = {
   team_id: string | null;
   label: string;
   is_correct: boolean;
+  home_goals?: number | null; // 스코어 옵션: 한국 골 (격자 -1 = '6골 이상' 버킷)
+  away_goals?: number | null; // 스코어 옵션: 상대 골
 };
 
 export type CategoryWithOptions = Category & { options: Option[] };
